@@ -1,4 +1,4 @@
-export type SectionKey = 'auth' | 'review' | 'library' | 'opponents' | 'strategies' | 'stats'
+export type SectionKey = 'auth' | 'review' | 'library' | 'opponents' | 'strategies' | 'bankroll' | 'stats'
 export type GameType = 'TOURNAMENT' | 'CASH'
 export type TournamentStage = 'EARLY' | 'BUBBLE' | 'ITM' | 'FT'
 export type Position = 'UTG' | 'UTG1' | 'UTG2' | 'LJ' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB'

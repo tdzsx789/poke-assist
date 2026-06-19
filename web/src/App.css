@@ -1214,15 +1214,17 @@ select:focus {
 
 .player-action-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 7px;
 }
 
 .player-action-card {
   display: grid;
-  gap: 12px;
+  grid-template-columns: minmax(190px, 0.85fr) minmax(310px, 1.35fr);
+  align-items: end;
+  gap: 7px 8px;
   min-width: 0;
-  padding: 12px;
+  padding: 8px;
   border: 1px solid var(--line);
   background: #fff;
 }
@@ -1241,20 +1243,21 @@ select:focus {
 
 .player-action-header {
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .action-position-badge {
   display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
-  min-width: 54px;
-  min-height: 32px;
-  padding: 0 9px;
+  min-width: 46px;
+  min-height: 28px;
+  padding: 0 7px;
   border: 1px solid rgba(29, 123, 83, 0.26);
   background: #f2fbf6;
   color: var(--accent);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 950;
   white-space: nowrap;
 }
@@ -1262,7 +1265,7 @@ select:focus {
 .player-action-main {
   display: grid;
   flex: 1;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   min-height: auto;
   padding: 0;
@@ -1272,20 +1275,35 @@ select:focus {
   text-align: left;
 }
 
+.player-action-main strong,
+.player-action-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-action-main strong {
+  font-size: 13px;
+}
+
+.player-action-main span {
+  font-size: 11px;
+}
+
 .player-action-main:disabled {
   cursor: default;
   opacity: 1;
 }
 
 .icon-action.compact {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
 }
 
 .action-editor-grid {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(86px, 0.5fr) minmax(104px, 0.62fr);
-  gap: 8px;
+  grid-template-columns: minmax(112px, 1fr) minmax(74px, 0.56fr) minmax(92px, 0.7fr);
+  gap: 6px;
   align-items: end;
 }
 
@@ -1293,17 +1311,34 @@ select:focus {
   min-width: 0;
 }
 
+.action-editor-grid label > span {
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+
+.action-editor-grid input,
+.action-editor-grid select {
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 13px;
+}
+
 .player-action-actions {
-  justify-content: space-between;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  justify-content: stretch;
   gap: 8px;
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px solid var(--line);
 }
 
+.player-action-actions button,
 .player-action-actions .primary-action {
-  min-height: 34px;
-  padding: 0 10px;
-  font-size: 13px;
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .action-history-panel {
@@ -1876,6 +1911,17 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
+  .player-action-card {
+    grid-template-columns: minmax(170px, 0.85fr) minmax(250px, 1.15fr);
+  }
+
+  .player-action-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+
   .board-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1910,13 +1956,12 @@ select:focus {
 
 	  .topbar-actions,
 	  .review-action-bar,
-		  .review-action-buttons,
+	  .review-action-buttons,
 		  .row-actions,
 		  .action-row,
 		  .action-select,
 		  .street-action-tools,
 		  .street-board-card,
-		  .player-action-actions,
 		  .player-info-grid {
 		    align-items: stretch;
 		    flex-direction: column;
@@ -1951,6 +1996,39 @@ select:focus {
   .player-action-grid,
   .position-strip {
     grid-template-columns: 1fr;
+  }
+
+  .player-action-card {
+    grid-template-columns: minmax(118px, 0.48fr) minmax(258px, 1fr);
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .player-action-actions {
+    grid-column: 1 / -1;
+  }
+
+  .player-action-card .action-editor-grid {
+    grid-template-columns: minmax(118px, 1fr) minmax(64px, 0.5fr) minmax(82px, 0.62fr);
+  }
+
+  .player-action-card .action-editor-grid input,
+  .player-action-card .action-editor-grid select {
+    min-height: 30px;
+    padding: 0 7px;
+  }
+
+  .player-action-card .player-action-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(82px, 1fr));
+    justify-content: stretch;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+
+  .player-action-card .player-action-actions button,
+  .player-action-card .player-action-actions .primary-action {
+    min-width: 0;
   }
 
   .action-history-panel {
@@ -2039,5 +2117,25 @@ select:focus {
 
   .flop-card-entry {
     grid-column: auto;
+  }
+
+  .player-action-card {
+    grid-template-columns: 1fr;
+  }
+
+  .player-action-card .player-action-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+
+  .player-action-card .player-action-actions button,
+  .player-action-card .player-action-actions .primary-action {
+    padding: 0 6px;
+    font-size: 11px;
+  }
+
+  .player-action-card .action-editor-grid {
+    grid-template-columns: minmax(108px, 1fr) minmax(62px, 0.5fr) minmax(78px, 0.64fr);
   }
 }

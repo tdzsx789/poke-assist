@@ -23,6 +23,7 @@ import {
   Trash2,
   UserCircle,
   Users,
+  Wallet,
 } from 'lucide-react'
 import './App.css'
 import { apiClient } from './apiClient'
@@ -71,9 +72,10 @@ const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = 
   { key: 'library', label: '手牌库', icon: Library },
   { key: 'opponents', label: '对手画像', icon: Users },
   { key: 'strategies', label: '策略库', icon: Target },
+  { key: 'bankroll', label: '资金管理', icon: Wallet },
   { key: 'stats', label: 'AI 结果库', icon: LineChart },
 ]
-const disabledNavSections = new Set<SectionKey>(['auth', 'opponents', 'strategies'])
+const disabledNavSections = new Set<SectionKey>(['auth', 'opponents', 'strategies', 'bankroll'])
 
 const reviewSteps = [
   { label: '1. 牌桌入口', detail: '创建新牌桌或加载已保存牌桌' },
@@ -89,6 +91,7 @@ const sectionPaths: Record<SectionKey, string> = {
   library: '/library',
   opponents: '/opponents',
   strategies: '/strategies',
+  bankroll: '/bankroll',
   stats: '/stats',
 }
 
@@ -425,6 +428,7 @@ function App() {
     if (activeSection === 'library') return '手牌库'
     if (activeSection === 'opponents') return '对手画像'
     if (activeSection === 'strategies') return '策略库'
+    if (activeSection === 'bankroll') return '资金管理'
     return 'AI 结果库'
   }, [activeSection, reviewStep])
 
@@ -1763,10 +1767,17 @@ function App() {
             </label>
           </div>
           <div className="row-actions player-action-actions">
-            {existingAction && <span className={`status ${existingAction.analysisStatus.toLowerCase()}`}>{analysisStatusLabels[existingAction.analysisStatus]}</span>}
-            <button className="primary-action" type="button" onClick={() => savePlayerAction(street, player, existingAction)} disabled={busy}>
-              {existingAction ? <Save size={16} /> : <Plus size={16} />}
-              {isEditing ? '保存编辑' : existingAction ? '更新行动' : '保存行动'}
+            <button className="primary-action" type="button" onClick={() => savePlayerAction(street, player)} disabled={busy || Boolean(existingAction)}>
+              {existingAction ? <CheckCircle2 size={16} /> : <Plus size={16} />}
+              {existingAction ? '已完成' : '保存'}
+            </button>
+            <button className="primary-action" type="button" onClick={() => savePlayerAction(street, player, existingAction)} disabled={busy || !existingAction}>
+              <Save size={16} />
+              {isEditing ? '保存' : '更新'}
+            </button>
+            <button type="button" disabled>
+              <Sparkles size={16} />
+              分析
             </button>
           </div>
         </article>
