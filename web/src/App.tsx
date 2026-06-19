@@ -63,7 +63,6 @@ type CardSuit = '黑桃' | '红桃' | '方块' | '梅花'
 type CardRank = 'A' | 'K' | 'Q' | 'J' | '10' | '9' | '8' | '7' | '6' | '5' | '4' | '3' | '2'
 type CardValue = `${CardSuit}${CardRank}` | ''
 type RouteState = { section: SectionKey; reviewStep: ReviewStep }
-type AnalysisStatus = HandAction['analysisStatus']
 type BoardStreet = Extract<Street, 'TURN' | 'RIVER'>
 
 const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = [
@@ -78,11 +77,11 @@ const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = 
 const disabledNavSections = new Set<SectionKey>(['auth', 'opponents', 'strategies', 'bankroll'])
 
 const reviewSteps = [
-  { label: '1. 牌桌入口', detail: '创建新牌桌或加载已保存牌桌' },
-  { label: '2. 牌桌与玩家信息', detail: '保存或复用 2-9 人桌玩家、位置、类型、筹码' },
-  { label: '3. 手牌信息录入', detail: '游戏类型、阶段、盲注、筹码和公共牌' },
-  { label: '4. 行动信息', detail: '按街道记录每个行动，支持分街道分析' },
-  { label: '5. AI 分析结果', detail: 'Range、EV、GTO、Exploit、ICM 与一句话结论' },
+  { label: '1. 牌桌入口' },
+  { label: '2. 牌桌与玩家信息' },
+  { label: '3. 手牌信息录入' },
+  { label: '4. 行动信息' },
+  { label: '5. AI 分析结果' },
 ]
 
 const sectionPaths: Record<SectionKey, string> = {
@@ -173,19 +172,6 @@ const actionTypeLabels: Record<ActionType, string> = {
   ALLIN: '全下',
 }
 
-const sizeUnitLabels: Record<SizeUnit, string> = {
-  BB: 'BB',
-  PERCENT: '底池比例',
-  ABSOLUTE: '筹码量',
-}
-
-const analysisStatusLabels: Record<AnalysisStatus, string> = {
-  PENDING: '待分析',
-  PROCESSING: '分析中',
-  COMPLETED: '已完成',
-  FAILED: '分析失败',
-}
-
 const patternTypeLabels = {
   PREFLOP_OPEN: '翻前开池',
   CBET: '持续下注',
@@ -234,7 +220,7 @@ const positionLabels: Record<Position, string> = {
   LJ: 'LJ',
   HJ: 'HJ',
   CO: 'CO',
-  BTN: 'Dealer / Button',
+  BTN: 'Button',
   SB: 'SB',
   BB: 'BB',
 }
@@ -800,29 +786,6 @@ function App() {
     setBusy(false)
   }
 
-  const editAction = (action: HandAction) => {
-    setActionDrafts((current) => ({
-      ...current,
-      [actionDraftKey(action.street, action.playerId)]: {
-        playerId: action.playerId,
-        street: action.street,
-        actionType: action.actionType,
-        actionSize: action.actionSize,
-        sizeUnit: action.sizeUnit,
-      },
-    }))
-    setEditingActionId(action.id)
-    setSelectedActionId(action.id)
-  }
-
-  const deleteAction = async (actionId: string) => {
-    setBusy(true)
-    const result = await apiClient.deleteAction(actionId)
-    syncReviewState(result)
-    showNotice('行动已删除，手牌标记为需重新分析')
-    setBusy(false)
-  }
-
   const analyzeStreet = async (street: Street) => {
     const targetActions = actions.filter((action) => action.street === street)
     if (targetActions.length === 0) {
@@ -1127,18 +1090,6 @@ function App() {
   )
 
   function renderReviewActions() {
-    const actionMessage =
-      reviewStep === 0
-        ? '从这里创建一张新牌桌，或载入一张已保存的牌桌。'
-        : reviewStep === 1
-          ? isTableComplete
-          ? '当前牌桌已可保存；下次相同牌桌可直接复用玩家信息'
-          : getTableValidationMessage()
-        : reviewStep === 2
-          ? isHandInfoComplete
-            ? '手牌必填项已完成，可以进入行动信息'
-            : getHandInfoValidationMessage()
-          : reviewSteps[reviewStep].detail
     const nextDisabled = busy || reviewStep === 0 || (reviewStep === 1 && !isTableComplete) || (reviewStep === 2 && !isHandInfoComplete) || (reviewStep === 3 && !hasAiResults)
     const nextTitle =
       reviewStep === 0
@@ -1157,7 +1108,6 @@ function App() {
       <footer className="review-action-bar">
         <div>
           <strong>{reviewSteps[reviewStep].label}</strong>
-          <span>{actionMessage}</span>
         </div>
         <div className="review-action-buttons">
           <button className="ghost-action" type="button" onClick={() => goToReviewStep(Math.max(reviewStep - 1, 0) as ReviewStep)} disabled={reviewStep === 0 || busy}>
@@ -1268,7 +1218,6 @@ function App() {
             <div className="section-heading">
               <div>
                 <h2>手牌分析流程</h2>
-                <p>从录入到整手牌评分。</p>
               </div>
             </div>
             <div className="step-list">
@@ -1290,7 +1239,6 @@ function App() {
                   {index < reviewStep ? <CheckCircle2 size={18} /> : index === reviewStep ? <Clock3 size={18} /> : <Circle size={18} />}
                   <div>
                     <strong>{step.label}</strong>
-                    <span>{step.detail}</span>
                   </div>
                 </button>
               ))}
@@ -1335,7 +1283,6 @@ function App() {
         <div className="section-heading">
           <div>
             <h2>选择牌桌入口</h2>
-            <p>先决定是创建一张新牌桌，还是直接复用已经保存过的牌桌玩家信息。</p>
           </div>
         </div>
         <div className="table-entry-grid">
@@ -1384,7 +1331,6 @@ function App() {
           <div className="section-heading">
             <div>
             <h2>3. 手牌信息录入</h2>
-            <p>本手牌会复用上一步已保存或已载入的牌桌玩家信息。</p>
           </div>
         </div>
         <form className="hand-form" onSubmit={(event) => event.preventDefault()}>
@@ -1501,7 +1447,6 @@ function App() {
           <div className="section-heading">
             <div>
               <h2>2. 牌桌与玩家信息</h2>
-              <p>先保存或复用固定牌桌。下次相同牌桌可直接载入玩家、位置、类型和筹码。</p>
             </div>
           </div>
           <div className="table-template-panel">
@@ -1665,6 +1610,12 @@ function App() {
       TURN: currentHand.boardTurn,
       RIVER: currentHand.boardRiver,
     }
+    const streetCardValues: Record<Street, string> = {
+      PREFLOP: '',
+      FLOP: currentHand.boardFlop,
+      TURN: currentHand.boardTurn,
+      RIVER: currentHand.boardRiver,
+    }
     const boardKeys: Record<BoardStreet, 'boardTurn' | 'boardRiver'> = {
       TURN: 'boardTurn',
       RIVER: 'boardRiver',
@@ -1716,6 +1667,7 @@ function App() {
       const needsSize = !nonSizingActionTypes.has(draft.actionType)
       const isSelected = existingAction && selectedActionId === existingAction.id
       const isEditing = existingAction && editingActionId === existingAction.id
+      const heroCards = player.holeCards || currentHand.heroCards
       return (
         <article className={`player-action-card${isSelected ? ' selected' : ''}${isEditing ? ' editing' : ''}`} key={player.id}>
           <div className="player-action-header">
@@ -1724,6 +1676,11 @@ function App() {
               <strong>{player.name}</strong>
               <span>{player.isHero ? 'Hero' : playerTypeLabels[player.playerType]} · {player.startingStack}BB</span>
             </button>
+            {player.isHero && (
+              <span className="hero-hole-cards" aria-label="Hero 手牌">
+                <CardDisplay value={heroCards} />
+              </span>
+            )}
             <button className="icon-action compact" type="button" onClick={() => setViewingPlayerId(player.id)} aria-label={`查看${player.name}玩家信息`}>
               <UserCircle size={17} />
             </button>
@@ -1790,7 +1747,6 @@ function App() {
           <div className="section-heading">
             <div>
               <h2>4. 行动信息</h2>
-              <p>按街道和座位顺序记录行动，弃牌玩家不会进入后续街道。</p>
             </div>
           </div>
           <div className="street-action-list">
@@ -1798,20 +1754,23 @@ function App() {
               const streetActions = sortedActions.filter((action) => action.street === street)
               const streetPlayers = getPlayersForStreet(street, visiblePlayers, sortedActions, availablePositions)
               const boardBlocked = (street === 'TURN' && !hasCompleteCards(currentHand.boardTurn, 1)) || (street === 'RIVER' && !hasCompleteCards(currentHand.boardRiver, 1))
+              const streetCards = streetCardValues[street]
               return (
                 <article className={boardBlocked ? 'street-action-group gated' : 'street-action-group'} key={street}>
                   <div className="street-action-header">
-                    <div>
+                    <div className="street-action-title">
                       <strong>{streetLabels[street]}</strong>
-                      <span>
-                        {streetPlayers.length} 位可行动玩家 · 已记录 {streetActions.length} 个行动
-                      </span>
                     </div>
                     <div className="street-action-tools">
-                      {street !== 'PREFLOP' && streetPlayers.length < players.length && <span className="street-live-count">已过滤弃牌玩家</span>}
+                      {street !== 'PREFLOP' && streetPlayers.length < players.length && <span className="street-live-count">已过滤</span>}
                       {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
                     </div>
                   </div>
+                  {streetCards && (
+                    <div className="street-dealt-cards" aria-label={`${streetLabels[street]}发牌`}>
+                      <CardDisplay value={streetCards} />
+                    </div>
+                  )}
                   {street === 'TURN' || street === 'RIVER' ? renderBoardGate(street) : null}
                   {boardBlocked ? (
                     <div className="empty-street">{streetLabels[street]}牌面完整后，该街行动会出现在这里。</div>
@@ -1830,60 +1789,6 @@ function App() {
             })}
           </div>
         </div>
-        <aside className="side-form action-history-panel">
-          <div className="section-heading compact-heading">
-            <div>
-              <h2>已记录行动</h2>
-              <p>{actions.length === 0 ? '还没有保存任何行动。' : '可选择行动进行分析、编辑或删除。'}</p>
-            </div>
-          </div>
-          <div className="street-list action-history-list">
-            {streetOrder.map((street) => {
-              const group = sortedActions.filter((action) => action.street === street)
-              return (
-                <article className="street-group" key={street}>
-                  <div className="street-header">
-                    <strong>{streetLabels[street]}</strong>
-                    <span>{group.length} 个行动</span>
-                  </div>
-                  {group.length === 0 ? (
-                    <div className="empty-street">暂无行动</div>
-                  ) : (
-                    group.map((action) => {
-                      const player = players.find((item) => item.id === action.playerId)
-                      const hasSize = !nonSizingActionTypes.has(action.actionType)
-                      return (
-                        <article className={selectedActionId === action.id ? 'action-row selected' : 'action-row'} key={action.id}>
-                          <button className="action-select" type="button" onClick={() => setSelectedActionId(action.id)}>
-                            <span className="action-order">{action.actionOrder}</span>
-                            <span className="action-main">
-                              <strong>
-                                {player?.name ?? '未知玩家'} · {player?.position ?? '-'}
-                              </strong>
-                              <small>
-                                {actionTypeLabels[action.actionType]}
-                                {hasSize ? ` · ${action.actionSize} ${sizeUnitLabels[action.sizeUnit]}` : ''}
-                              </small>
-                            </span>
-                            <span className={`status ${action.analysisStatus.toLowerCase()}`}>{analysisStatusLabels[action.analysisStatus]}</span>
-                          </button>
-                          <span className="inline-actions">
-                            <button type="button" onClick={() => editAction(action)} disabled={busy}>
-                              编辑
-                            </button>
-                            <button type="button" onClick={() => deleteAction(action.id)} disabled={busy}>
-                              删除
-                            </button>
-                          </span>
-                        </article>
-                      )
-                    })
-                  )}
-                </article>
-              )
-            })}
-          </div>
-        </aside>
         {viewingPlayer && (
           <div className="modal-scrim" role="presentation" onMouseDown={() => setViewingPlayerId(null)}>
             <article className="player-modal player-info-modal" role="dialog" aria-modal="true" aria-labelledby="player-info-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -1933,7 +1838,6 @@ function App() {
           <div className="section-heading">
             <div>
               <h2>5. AI 行动分析结果</h2>
-              <p>每个行动展示 Range、EV、最优打法、Exploit、下注尺度、ICM 和一句话结论。</p>
             </div>
             <button className="ghost-action" type="button" onClick={analyzeHand} disabled={busy || actions.length === 0}>
               <Sparkles size={16} />

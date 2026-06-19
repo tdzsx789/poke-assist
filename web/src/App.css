@@ -36,11 +36,8 @@
 .nav-list button,
 .primary-action,
 .ghost-action,
-.action-row,
-.action-select,
 .flow-strip,
 .row-actions,
-.inline-actions,
 .segmented,
 .topbar-actions,
 .review-action-buttons {
@@ -84,8 +81,6 @@
 .brand-block strong,
 .data-card strong,
 .step-card strong,
-.street-header strong,
-.action-main strong,
 .summary-action strong,
 .metric-cards strong,
 .score-card strong,
@@ -97,11 +92,9 @@
 .section-heading span,
 .step-card span,
 .data-card span,
-.action-main small,
 .score-card span,
 .metric-cards span,
 .metric-row span,
-.street-header span,
 label span {
   color: var(--muted);
   font-size: 12px;
@@ -233,7 +226,6 @@ button:disabled {
 .primary-action,
 .ghost-action,
 .row-actions button,
-.inline-actions button,
 .segmented button {
   justify-content: center;
   gap: 8px;
@@ -1100,19 +1092,19 @@ select:focus {
 }
 
 .action-workspace {
-  grid-template-columns: minmax(0, 1.42fr) minmax(340px, 0.68fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .street-action-list {
   display: grid;
-  gap: 14px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .street-action-group {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 9px;
+  padding: 10px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.66);
 }
@@ -1133,34 +1125,76 @@ select:focus {
 
 .street-action-header {
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .street-action-tools {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 
 .street-analysis-button {
-  min-height: 34px;
-  padding: 0 12px;
-  font-size: 13px;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .street-action-footer {
   display: flex;
   justify-content: flex-end;
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 
-.street-action-header > div {
-  display: grid;
-  gap: 4px;
+.street-action-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+  white-space: nowrap;
+}
+
+.street-dealt-cards {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.hero-hole-cards {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.street-dealt-cards .card-display,
+.hero-hole-cards .card-display {
+  gap: 4px;
+}
+
+.hero-hole-cards .card-display {
+  flex-wrap: nowrap;
+}
+
+.street-dealt-cards .card-token,
+.hero-hole-cards .card-token {
+  min-height: 24px;
+  padding: 2px 6px;
+}
+
+.street-dealt-cards .card-token img,
+.hero-hole-cards .card-token img {
+  width: 15px;
+  height: 15px;
+}
+
+.street-dealt-cards .card-token strong,
+.hero-hole-cards .card-token strong {
+  font-size: 12px;
 }
 
 .street-action-header strong,
@@ -1181,11 +1215,11 @@ select:focus {
 
 .street-live-count {
   flex: 0 0 auto;
-  padding: 5px 8px;
+  padding: 4px 7px;
   border: 1px solid rgba(29, 123, 83, 0.24);
   background: #f2fbf6;
   color: var(--accent) !important;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -1295,6 +1329,10 @@ select:focus {
   opacity: 1;
 }
 
+.hero-hole-cards {
+  flex: 0 0 auto;
+}
+
 .icon-action.compact {
   width: 28px;
   height: 28px;
@@ -1339,25 +1377,6 @@ select:focus {
   padding: 0 9px;
   font-size: 12px;
   white-space: nowrap;
-}
-
-.action-history-panel {
-  position: sticky;
-  top: 18px;
-}
-
-.compact-heading {
-  padding-bottom: 12px;
-}
-
-.compact-heading h2 {
-  font-size: 16px;
-}
-
-.action-history-list {
-  max-height: calc(100vh - 196px);
-  overflow: auto;
-  padding-right: 2px;
 }
 
 .player-info-grid {
@@ -1443,91 +1462,10 @@ select:focus {
   color: var(--accent);
 }
 
-.street-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.action-row {
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  background: #fff;
-}
-
-.action-select {
-  flex: 1;
-  min-width: 0;
-  min-height: 48px;
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-}
-
-.action-row.selected,
-.action-row:hover,
 .summary-action.selected,
 .summary-action:hover {
   border-color: var(--accent);
   background: #f2fbf6;
-}
-
-.action-order {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  background: var(--ink);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.action-main {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-}
-
-.status {
-  white-space: nowrap;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.status.completed {
-  border-color: rgba(29, 123, 83, 0.28);
-  color: var(--accent);
-}
-
-.status.processing {
-  border-color: rgba(168, 102, 24, 0.28);
-  color: #a86618;
-}
-
-.status.failed {
-  border-color: rgba(188, 49, 49, 0.32);
-  color: #b53737;
-}
-
-.inline-actions {
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.inline-actions button {
-  min-height: 30px;
-  padding: 0 8px;
-  font-size: 12px;
 }
 
 .empty-street,
@@ -1954,15 +1892,13 @@ select:focus {
     flex-direction: column;
   }
 
-	  .topbar-actions,
-	  .review-action-bar,
-	  .review-action-buttons,
-		  .row-actions,
-		  .action-row,
-		  .action-select,
-		  .street-action-tools,
-		  .street-board-card,
-		  .player-info-grid {
+		  .topbar-actions,
+		  .review-action-bar,
+		  .review-action-buttons,
+			  .row-actions,
+			  .street-action-tools,
+			  .street-board-card,
+			  .player-info-grid {
 		    align-items: stretch;
 		    flex-direction: column;
 		  }
@@ -2031,16 +1967,6 @@ select:focus {
     min-width: 0;
   }
 
-  .action-history-panel {
-    position: static;
-  }
-
-  .action-history-list {
-    max-height: none;
-    overflow: visible;
-    padding-right: 0;
-  }
-
   .ai-result-card {
     grid-template-columns: 1fr;
   }
@@ -2053,9 +1979,18 @@ select:focus {
     flex: initial;
   }
 
-  .street-action-tools,
   .street-analysis-button {
     width: 100%;
+  }
+
+  .street-action-header .street-analysis-button {
+    width: auto;
+  }
+
+  .street-action-tools {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-end;
   }
 
   .street-action-footer {
