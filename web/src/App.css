@@ -1163,6 +1163,25 @@ select:focus {
   display: flex;
   align-items: center;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.street-dealt-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.street-dealt-cards:hover .card-token {
+  border-color: var(--accent);
+  background: #f2fbf6;
 }
 
 .hero-hole-cards {
@@ -1213,22 +1232,16 @@ select:focus {
   font-weight: 780;
 }
 
-.street-live-count {
-  flex: 0 0 auto;
-  padding: 4px 7px;
-  border: 1px solid rgba(29, 123, 83, 0.24);
-  background: #f2fbf6;
-  color: var(--accent) !important;
-  font-size: 11px;
-  font-weight: 900;
-}
-
 .street-board-card {
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px;
   border: 1px solid rgba(33, 44, 37, 0.11);
   background: var(--field);
+}
+
+.street-board-card.editing {
+  align-items: center;
 }
 
 .street-board-card.ready {
@@ -1991,6 +2004,11 @@ select:focus {
     align-items: center;
     flex-direction: row;
     justify-content: flex-end;
+  }
+
+  .street-dealt-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .street-action-footer {

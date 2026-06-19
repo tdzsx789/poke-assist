@@ -63,7 +63,7 @@ type CardSuit = '黑桃' | '红桃' | '方块' | '梅花'
 type CardRank = 'A' | 'K' | 'Q' | 'J' | '10' | '9' | '8' | '7' | '6' | '5' | '4' | '3' | '2'
 type CardValue = `${CardSuit}${CardRank}` | ''
 type RouteState = { section: SectionKey; reviewStep: ReviewStep }
-type BoardStreet = Extract<Street, 'TURN' | 'RIVER'>
+type DealtStreet = Extract<Street, 'FLOP' | 'TURN' | 'RIVER'>
 
 const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = [
   { key: 'auth', label: '用户中心', icon: UserCircle },
@@ -370,6 +370,7 @@ function App() {
   const [actionDrafts, setActionDrafts] = useState<Record<string, ActionDraft>>({})
   const [editingActionId, setEditingActionId] = useState<string | null>(null)
   const [viewingPlayerId, setViewingPlayerId] = useState<string | null>(null)
+  const [editingBoardStreet, setEditingBoardStreet] = useState<DealtStreet | null>(null)
 
   const [handFilters, setHandFilters] = useState<HandFilters>({ search: '', gameType: 'ALL', stage: 'ALL', opponentType: 'ALL' })
   const [handList, setHandList] = useState<HandSummary[]>([])
@@ -1606,41 +1607,61 @@ function App() {
   function renderActions() {
     const viewingPlayer = players.find((player) => player.id === viewingPlayerId)
     const sortedActions = [...actions].sort((first, second) => first.actionOrder - second.actionOrder)
-    const boardValues: Record<BoardStreet, string> = {
-      TURN: currentHand.boardTurn,
-      RIVER: currentHand.boardRiver,
-    }
     const streetCardValues: Record<Street, string> = {
       PREFLOP: '',
       FLOP: currentHand.boardFlop,
       TURN: currentHand.boardTurn,
       RIVER: currentHand.boardRiver,
     }
-    const boardKeys: Record<BoardStreet, 'boardTurn' | 'boardRiver'> = {
+    const boardKeys: Record<DealtStreet, 'boardFlop' | 'boardTurn' | 'boardRiver'> = {
+      FLOP: 'boardFlop',
       TURN: 'boardTurn',
       RIVER: 'boardRiver',
     }
+    const boardCardCounts: Record<DealtStreet, number> = {
+      FLOP: 3,
+      TURN: 1,
+      RIVER: 1,
+    }
 
-    const saveBoardCard = async (street: BoardStreet, value: string) => {
+    const saveBoardCard = async (street: DealtStreet, value: string) => {
       updateHand(boardKeys[street], value)
-      if (!hasCompleteCards(value, 1)) return
+      if (!hasCompleteCards(value, boardCardCounts[street])) return
       setBusy(true)
       const saved = await apiClient.updateHand({ ...currentHand, [boardKeys[street]]: value, analysisDirty: true })
       setHand(saved)
+      setEditingBoardStreet(null)
       showNotice(`${streetLabels[street]}已发出，可以继续录入行动`)
       setBusy(false)
     }
 
-    const renderBoardGate = (street: BoardStreet) => {
-      const value = boardValues[street]
-      const isComplete = hasCompleteCards(value, 1)
+    const renderStreetBoardEditor = (street: DealtStreet, forceOpen = false) => {
+      const value = streetCardValues[street]
+      const isComplete = hasCompleteCards(value, boardCardCounts[street])
+      const isEditing = forceOpen || editingBoardStreet === street || !isComplete
       return (
-        <div className={isComplete ? 'street-board-card ready' : 'street-board-card'}>
-          <div>
-            <strong>{streetLabels[street]}牌面</strong>
-            <span>{isComplete ? <CardDisplay value={value} /> : `添加${streetLabels[street]}后再录入该街行动`}</span>
+        isEditing && (
+          <div className={isComplete ? 'street-board-card ready editing' : 'street-board-card editing'}>
+            <CardPickerGroup count={boardCardCounts[street]} label={streetLabels[street]} value={value} onChange={(nextValue) => saveBoardCard(street, nextValue)} allowEmpty />
           </div>
-          <CardPickerGroup count={1} label={streetLabels[street]} value={value} onChange={(nextValue) => saveBoardCard(street, nextValue)} allowEmpty optionalCollapsed />
+        )
+      )
+    }
+
+    const renderStreetBoardDisplay = (street: Street, value: string) => {
+      if (street === 'PREFLOP' || !value) return null
+      const dealtStreet = street as DealtStreet
+      if (!hasCompleteCards(value, boardCardCounts[dealtStreet])) return null
+      return (
+        <div className="street-dealt-row">
+          <button
+            className="street-dealt-cards"
+            type="button"
+            aria-label={`${editingBoardStreet === dealtStreet ? '关闭' : '编辑'}${streetLabels[street]}牌面`}
+            onClick={() => setEditingBoardStreet((current) => (current === dealtStreet ? null : dealtStreet))}
+          >
+            <CardDisplay value={value} />
+          </button>
         </div>
       )
     }
@@ -1762,16 +1783,12 @@ function App() {
                       <strong>{streetLabels[street]}</strong>
                     </div>
                     <div className="street-action-tools">
-                      {street !== 'PREFLOP' && streetPlayers.length < players.length && <span className="street-live-count">已过滤</span>}
                       {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
                     </div>
                   </div>
-                  {streetCards && (
-                    <div className="street-dealt-cards" aria-label={`${streetLabels[street]}发牌`}>
-                      <CardDisplay value={streetCards} />
-                    </div>
-                  )}
-                  {street === 'TURN' || street === 'RIVER' ? renderBoardGate(street) : null}
+                  {renderStreetBoardDisplay(street, streetCards)}
+                  {street === 'FLOP' ? renderStreetBoardEditor(street) : null}
+                  {street === 'TURN' || street === 'RIVER' ? renderStreetBoardEditor(street, !streetCards) : null}
                   {boardBlocked ? (
                     <div className="empty-street">{streetLabels[street]}牌面完整后，该街行动会出现在这里。</div>
                   ) : streetPlayers.length === 0 ? (
