@@ -44,7 +44,6 @@ import type {
   Position,
   SectionKey,
   SizeUnit,
-  StatisticsOverview,
   StrategyAdjustment,
   StrategyDraft,
   StrategyEvaluation,
@@ -64,6 +63,7 @@ type CardRank = 'A' | 'K' | 'Q' | 'J' | '10' | '9' | '8' | '7' | '6' | '5' | '4'
 type CardValue = `${CardSuit}${CardRank}` | ''
 type RouteState = { section: SectionKey; reviewStep: ReviewStep }
 type AnalysisStatus = HandAction['analysisStatus']
+type BoardStreet = Extract<Street, 'TURN' | 'RIVER'>
 
 const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = [
   { key: 'auth', label: '用户中心', icon: UserCircle },
@@ -71,15 +71,15 @@ const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = 
   { key: 'library', label: '手牌库', icon: Library },
   { key: 'opponents', label: '对手画像', icon: Users },
   { key: 'strategies', label: '策略库', icon: Target },
-  { key: 'stats', label: '学习统计', icon: LineChart },
+  { key: 'stats', label: 'AI 结果库', icon: LineChart },
 ]
-const disabledNavSections = new Set<SectionKey>(['auth', 'opponents', 'strategies', 'stats'])
+const disabledNavSections = new Set<SectionKey>(['auth', 'opponents', 'strategies'])
 
 const reviewSteps = [
   { label: '1. 牌桌入口', detail: '创建新牌桌或加载已保存牌桌' },
   { label: '2. 牌桌与玩家信息', detail: '保存或复用 2-9 人桌玩家、位置、类型、筹码' },
   { label: '3. 手牌信息录入', detail: '游戏类型、阶段、盲注、筹码和公共牌' },
-  { label: '4. 行动信息', detail: '按街道记录每个行动，支持单行动分析' },
+  { label: '4. 行动信息', detail: '按街道记录每个行动，支持分街道分析' },
   { label: '5. AI 分析结果', detail: 'Range、EV、GTO、Exploit、ICM 与一句话结论' },
 ]
 
@@ -246,6 +246,8 @@ const tablePositions: Record<TableSize, Position[]> = {
   8: ['UTG', 'UTG1', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
   9: ['UTG', 'UTG1', 'UTG2', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
 }
+const preflopActionPositions: Position[] = ['UTG', 'UTG1', 'UTG2', 'LJ', 'HJ', 'CO', 'BTN', 'SB', 'BB']
+const postflopActionPositions: Position[] = ['SB', 'BB', 'UTG', 'UTG1', 'UTG2', 'LJ', 'HJ', 'CO', 'BTN']
 const tableSizeOptions: TableSize[] = [2, 3, 4, 5, 6, 7, 8, 9]
 const toTableSize = (value: number): TableSize => (tableSizeOptions.includes(value as TableSize) ? (value as TableSize) : 6)
 
@@ -255,6 +257,26 @@ const streetLabels: Record<Street, string> = {
   TURN: '转牌',
   RIVER: '河牌',
 }
+const streetOrder: Street[] = ['PREFLOP', 'FLOP', 'TURN', 'RIVER']
+const previousStreets: Record<Street, Street[]> = {
+  PREFLOP: [],
+  FLOP: ['PREFLOP'],
+  TURN: ['PREFLOP', 'FLOP'],
+  RIVER: ['PREFLOP', 'FLOP', 'TURN'],
+}
+const actionTypeOptionsByStreet: Record<Street, ActionType[]> = {
+  PREFLOP: ['FOLD', 'CHECK', 'OPEN', 'CALL', 'RAISE', '3BET', '4BET', 'ALLIN'],
+  FLOP: ['CHECK', 'BET', 'CALL', 'RAISE', 'FOLD', 'ALLIN'],
+  TURN: ['CHECK', 'BET', 'CALL', 'RAISE', 'FOLD', 'ALLIN'],
+  RIVER: ['CHECK', 'BET', 'CALL', 'RAISE', 'FOLD', 'ALLIN'],
+}
+const defaultActionTypeByStreet: Record<Street, ActionType> = {
+  PREFLOP: 'FOLD',
+  FLOP: 'CHECK',
+  TURN: 'CHECK',
+  RIVER: 'CHECK',
+}
+const nonSizingActionTypes = new Set<ActionType>(['FOLD', 'CHECK'])
 
 const suitOptions: CardSuit[] = ['黑桃', '红桃', '方块', '梅花']
 const rankOptions: CardRank[] = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2']
@@ -285,6 +307,31 @@ const hasCompleteCards = (value: string, count: number) =>
     const parsed = readCard(card)
     return Boolean(parsed.suit && parsed.rank)
   })
+const sortPlayersByPosition = (players: HandPlayer[], positions: Position[]) =>
+  [...players].sort((first, second) => {
+    const firstIndex = positions.indexOf(first.position)
+    const secondIndex = positions.indexOf(second.position)
+    return (firstIndex === -1 ? 99 : firstIndex) - (secondIndex === -1 ? 99 : secondIndex)
+  })
+const getPlayersForStreet = (street: Street, players: HandPlayer[], actions: HandAction[], positions: Position[]) => {
+  const foldedPlayerIds = new Set(
+    actions
+      .filter((action) => previousStreets[street].includes(action.street) && action.actionType === 'FOLD')
+      .map((action) => action.playerId),
+  )
+  const actionPositions = street === 'PREFLOP' ? preflopActionPositions : postflopActionPositions
+  const streetPositions = actionPositions.filter((position) => positions.includes(position))
+  return sortPlayersByPosition(players.filter((player) => !foldedPlayerIds.has(player.id)), streetPositions)
+}
+const getDefaultActionSize = (street: Street, actionType: ActionType) => (nonSizingActionTypes.has(actionType) ? 0 : street === 'PREFLOP' ? 2.2 : 1)
+const createActionDraft = (street: Street, playerId = '', actionType = defaultActionTypeByStreet[street]): ActionDraft => ({
+  playerId,
+  street,
+  actionType,
+  actionSize: getDefaultActionSize(street, actionType),
+  sizeUnit: 'BB',
+})
+const actionDraftKey = (street: Street, playerId: string) => `${street}:${playerId}`
 
 const emptyPlayer: PlayerDraft = {
   name: '',
@@ -294,14 +341,6 @@ const emptyPlayer: PlayerDraft = {
   isHero: false,
   holeCards: '',
   rangeNotes: '',
-}
-
-const emptyAction: ActionDraft = {
-  playerId: '',
-  street: 'PREFLOP',
-  actionType: 'CALL',
-  actionSize: 2,
-  sizeUnit: 'BB',
 }
 
 const emptyStrategyDraft: StrategyDraft = {
@@ -339,8 +378,9 @@ function App() {
   const [playerDraft, setPlayerDraft] = useState<PlayerDraft>(emptyPlayer)
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null)
   const [isAddingPlayer, setIsAddingPlayer] = useState(false)
-  const [actionDraft, setActionDraft] = useState<ActionDraft>(emptyAction)
+  const [actionDrafts, setActionDrafts] = useState<Record<string, ActionDraft>>({})
   const [editingActionId, setEditingActionId] = useState<string | null>(null)
+  const [viewingPlayerId, setViewingPlayerId] = useState<string | null>(null)
 
   const [handFilters, setHandFilters] = useState<HandFilters>({ search: '', gameType: 'ALL', stage: 'ALL', opponentType: 'ALL' })
   const [handList, setHandList] = useState<HandSummary[]>([])
@@ -363,13 +403,11 @@ function App() {
     notes: '成功应用策略调整。',
   })
 
-  const [statsRange, setStatsRange] = useState<'7D' | '30D' | '90D'>('7D')
-  const [stats, setStats] = useState<StatisticsOverview | null>(null)
-
   const selectedAction = actions.find((action) => action.id === selectedActionId) ?? actions[0]
+  const analyzedActions = actions.filter((action) => action.analysis)
+  const hasAiResults = analyzedActions.length > 0 || Boolean(hand?.overallSuggestion)
   const selectedOpponent = opponents.find((opponent) => opponent.id === selectedOpponentId) ?? opponents[0]
   const selectedStrategy = strategies.find((strategy) => strategy.id === evaluationStrategyId) ?? strategies[0]
-  const selectedActionPlayerId = players.some((player) => player.id === actionDraft.playerId) ? actionDraft.playerId : players[0]?.id ?? ''
   const availablePositions = tablePositions[tableSize]
   const tableIsFull = players.length >= tableSize
   const playerDraftPosition = availablePositions.includes(playerDraft.position) ? playerDraft.position : availablePositions[0]
@@ -387,18 +425,17 @@ function App() {
     if (activeSection === 'library') return '手牌库'
     if (activeSection === 'opponents') return '对手画像'
     if (activeSection === 'strategies') return '策略库'
-    return '学习统计'
+    return 'AI 结果库'
   }, [activeSection, reviewStep])
 
   useEffect(() => {
     const load = async () => {
-      const [profileData, draft, hands, opponentData, strategyData, statData, evaluationData] = await Promise.all([
+      const [profileData, draft, hands, opponentData, strategyData, evaluationData] = await Promise.all([
         apiClient.getProfile(),
         apiClient.getReviewDraft(),
         apiClient.listHands(),
         apiClient.listOpponents(),
         apiClient.listStrategies(),
-        apiClient.getStatistics('7D'),
         apiClient.listStrategyEvaluations(),
       ])
       const savedTables = await apiClient.listTableTemplates()
@@ -412,14 +449,13 @@ function App() {
       setTableTemplateName(savedTables[0]?.name ?? '默认 6 人桌 · FT 常用牌桌')
       setActions(draft.actions)
       setSelectedActionId(draft.actions[0]?.id ?? '')
-      setActionDraft({ ...emptyAction, playerId: draft.players[0]?.id ?? '' })
+      setActionDrafts({})
       setHandList(hands)
       setOpponents(opponentData)
       setSelectedOpponentId(opponentData[0]?.id ?? '')
       setStrategies(strategyData)
       setEvaluationStrategyId(strategyData[0]?.id ?? '')
       setStrategyDraft({ ...emptyStrategyDraft, playerId: opponentData[0]?.id ?? '' })
-      setStats(statData)
       setEvaluations(evaluationData)
       setLoading(false)
     }
@@ -662,7 +698,7 @@ function App() {
     setPlayerDraft({ ...emptyPlayer, position: tablePositions[nextSize][0] })
     setEditingPlayerId(null)
     setIsAddingPlayer(false)
-    setActionDraft({ ...emptyAction, playerId: '' })
+    setActionDrafts({})
     navigateToRoute({ section: 'review', reviewStep: 1 })
     showNotice('已创建空白 6 人桌，请先录入玩家信息')
     setBusy(false)
@@ -710,40 +746,69 @@ function App() {
       setPlayerDraft({ ...emptyPlayer, position: tablePositions[toTableSize(result.template.tableSize)][0] })
       setEditingPlayerId(null)
       setIsAddingPlayer(false)
-      setActionDraft({ ...emptyAction, playerId: result.players[0]?.id ?? '' })
+      setActionDrafts({})
       if (options?.goToPlayers) navigateToRoute({ section: 'review', reviewStep: 1 })
       showNotice(`已载入牌桌「${result.template.name}」，本手牌将复用这些玩家信息`)
     }
     setBusy(false)
   }
 
-  const addOrUpdateAction = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!selectedActionPlayerId) {
-      showNotice('请先选择行动玩家', 'error')
-      return
+  const updateActionDraft = (street: Street, playerId: string, patch: Partial<ActionDraft>, fallback?: ActionDraft) => {
+    const key = actionDraftKey(street, playerId)
+    setActionDrafts((current) => {
+      const base = current[key] ?? fallback ?? createActionDraft(street, playerId)
+      const nextActionType = patch.actionType ?? base.actionType
+      const next = {
+        ...base,
+        ...patch,
+        playerId,
+        street,
+      }
+      if (patch.actionType && patch.actionSize === undefined) {
+        next.actionSize = getDefaultActionSize(street, nextActionType)
+      }
+      return { ...current, [key]: next }
+    })
+  }
+
+  const savePlayerAction = async (street: Street, player: HandPlayer, existingAction?: HandAction) => {
+    const key = actionDraftKey(street, player.id)
+    const draft = actionDrafts[key] ?? (existingAction ? { ...existingAction } : createActionDraft(street, player.id))
+    const payload: ActionDraft = {
+      playerId: player.id,
+      street,
+      actionType: draft.actionType,
+      actionSize: nonSizingActionTypes.has(draft.actionType) ? 0 : Number(draft.actionSize) || getDefaultActionSize(street, draft.actionType),
+      sizeUnit: draft.sizeUnit,
     }
     setBusy(true)
-    const targetActionId = editingActionId
-    const payload = { ...actionDraft, playerId: selectedActionPlayerId }
-    const result = targetActionId ? await apiClient.updateAction(targetActionId, payload) : await apiClient.addAction(payload)
+    const result = existingAction ? await apiClient.updateAction(existingAction.id, payload) : await apiClient.addAction(payload)
     syncReviewState(result)
-    setSelectedActionId(targetActionId ?? result.actions.at(-1)?.id ?? '')
+    const savedAction = existingAction ? result.actions.find((action) => action.id === existingAction.id) : result.actions.at(-1)
+    setSelectedActionId(savedAction?.id ?? existingAction?.id ?? selectedActionId)
     setEditingActionId(null)
-    setActionDraft({ ...emptyAction, playerId: selectedActionPlayerId })
-    showNotice(editingActionId ? '行动已更新，原分析已失效' : '行动已添加，可进行单行动分析')
+    setActionDrafts((current) => {
+      const next = { ...current }
+      delete next[key]
+      return next
+    })
+    showNotice(existingAction ? '行动已更新，原分析已失效' : '行动已添加，可进行该街道分析')
     setBusy(false)
   }
 
   const editAction = (action: HandAction) => {
-    setActionDraft({
-      playerId: action.playerId,
-      street: action.street,
-      actionType: action.actionType,
-      actionSize: action.actionSize,
-      sizeUnit: action.sizeUnit,
-    })
+    setActionDrafts((current) => ({
+      ...current,
+      [actionDraftKey(action.street, action.playerId)]: {
+        playerId: action.playerId,
+        street: action.street,
+        actionType: action.actionType,
+        actionSize: action.actionSize,
+        sizeUnit: action.sizeUnit,
+      },
+    }))
     setEditingActionId(action.id)
+    setSelectedActionId(action.id)
   }
 
   const deleteAction = async (actionId: string) => {
@@ -754,16 +819,27 @@ function App() {
     setBusy(false)
   }
 
-  const analyzeAction = async (actionId: string) => {
+  const analyzeStreet = async (street: Street) => {
+    const targetActions = actions.filter((action) => action.street === street)
+    if (targetActions.length === 0) {
+      showNotice(`请先保存${streetLabels[street]}行动，再进行分析`, 'error')
+      return
+    }
+    const targetIds = new Set(targetActions.map((action) => action.id))
     setBusy(true)
-    setActions((current) => current.map((action) => (action.id === actionId ? { ...action, analysisStatus: 'PROCESSING' } : action)))
-    const analyzed = await apiClient.analyzeAction(actionId)
-    setActions((current) => current.map((action) => (action.id === actionId && analyzed ? analyzed : action)))
+    setActions((current) => current.map((action) => (targetIds.has(action.id) ? { ...action, analysisStatus: 'PROCESSING' } : action)))
+    const analyzed = await Promise.all(targetActions.map((action) => apiClient.analyzeAction(action.id)))
+    const analyzedById = new Map(
+      analyzed
+        .filter((action): action is HandAction => Boolean(action))
+        .map((action) => [action.id, action]),
+    )
+    setActions((current) => current.map((action) => analyzedById.get(action.id) ?? action))
     const nextHand = await apiClient.getReviewDraft()
     setHand(nextHand.hand)
-    setSelectedActionId(actionId)
-    navigateToRoute({ section: 'review', reviewStep: 4 })
-    showNotice('单行动分析完成')
+    setActions(nextHand.actions)
+    setSelectedActionId(targetActions[0]?.id ?? selectedActionId)
+    showNotice(`${streetLabels[street]}行动分析完成`)
     setBusy(false)
     await refreshHandList()
   }
@@ -894,26 +970,21 @@ function App() {
     showNotice('历史筛选已重置', 'info')
   }
 
-  const refreshStats = async (range: '7D' | '30D' | '90D') => {
-    setStatsRange(range)
-    setStats(await apiClient.getStatistics(range))
-    showNotice(`已切换统计范围：${range}`)
-  }
-
   const openReviewWorkspace = () => {
     navigateToRoute({ section: 'review', reviewStep: 0 })
     setTableEntryMode(null)
     setEditingPlayerId(null)
     setIsAddingPlayer(false)
     setEditingActionId(null)
+    setViewingPlayerId(null)
     setPlayerDraft({ ...emptyPlayer, position: tablePositions[tableSize][0] })
-    setActionDraft({ ...emptyAction, playerId: players[0]?.id ?? '' })
+    setActionDrafts({})
     setSelectedActionId(actions[0]?.id ?? '')
     setNotice(null)
   }
 
   const handleNavigate = (section: SectionKey) => {
-    if (disabledNavSections.has(section)) return
+    if (disabledNavSections.has(section) || (section === 'stats' && !hasAiResults)) return
     if (section === 'review') {
       openReviewWorkspace()
     } else {
@@ -964,7 +1035,7 @@ function App() {
         <nav className="nav-list">
           {navItems.map((item) => {
             const Icon = item.icon
-            const disabled = disabledNavSections.has(item.key)
+            const disabled = disabledNavSections.has(item.key) || (item.key === 'stats' && !hasAiResults)
             return (
               <button
                 aria-disabled={disabled}
@@ -1031,7 +1102,7 @@ function App() {
         <nav className="nav-list">
           {navItems.map((item) => {
             const Icon = item.icon
-            const disabled = disabledNavSections.has(item.key)
+            const disabled = disabledNavSections.has(item.key) || (item.key === 'stats' && !hasAiResults)
             return (
               <button
                 aria-disabled={disabled}
@@ -1064,7 +1135,7 @@ function App() {
             ? '手牌必填项已完成，可以进入行动信息'
             : getHandInfoValidationMessage()
           : reviewSteps[reviewStep].detail
-    const nextDisabled = busy || reviewStep === 0 || (reviewStep === 1 && !isTableComplete) || (reviewStep === 2 && !isHandInfoComplete)
+    const nextDisabled = busy || reviewStep === 0 || (reviewStep === 1 && !isTableComplete) || (reviewStep === 2 && !isHandInfoComplete) || (reviewStep === 3 && !hasAiResults)
     const nextTitle =
       reviewStep === 0
         ? '请先选择创建或加载牌桌'
@@ -1072,8 +1143,10 @@ function App() {
         ? getTableValidationMessage()
         : reviewStep === 2 && !isHandInfoComplete
           ? getHandInfoValidationMessage()
+          : reviewStep === 3 && !hasAiResults
+            ? '请先保存任一街道行动，并点击该街道的“分析”生成 AI 结果'
           : undefined
-    const nextLabel = reviewStep === 0 ? '先选择牌桌入口' : reviewStep === 1 ? '保存牌桌并进入手牌信息' : reviewStep === 2 ? '保存手牌并进入行动信息' : '进入下一步'
+    const nextLabel = reviewStep === 0 ? '先选择牌桌入口' : reviewStep === 1 ? '保存牌桌并进入手牌信息' : reviewStep === 2 ? '保存手牌并进入行动信息' : reviewStep === 3 ? '去 AI 分析结果页' : '进入下一步'
     const nextAction = reviewStep === 1 ? saveTableAndContinue : reviewStep === 2 ? saveHand : () => goToReviewStep(Math.min(reviewStep + 1, 4) as ReviewStep)
 
     return (
@@ -1236,7 +1309,7 @@ function App() {
           <ChevronRight size={16} />
           <span>行动信息</span>
           <ChevronRight size={16} />
-          <span>行动级分析</span>
+          <span>分街道分析</span>
           <ChevronRight size={16} />
           <span>历史沉淀</span>
         </section>
@@ -1582,18 +1655,180 @@ function App() {
   }
 
   function renderActions() {
+    const viewingPlayer = players.find((player) => player.id === viewingPlayerId)
+    const sortedActions = [...actions].sort((first, second) => first.actionOrder - second.actionOrder)
+    const boardValues: Record<BoardStreet, string> = {
+      TURN: currentHand.boardTurn,
+      RIVER: currentHand.boardRiver,
+    }
+    const boardKeys: Record<BoardStreet, 'boardTurn' | 'boardRiver'> = {
+      TURN: 'boardTurn',
+      RIVER: 'boardRiver',
+    }
+
+    const saveBoardCard = async (street: BoardStreet, value: string) => {
+      updateHand(boardKeys[street], value)
+      if (!hasCompleteCards(value, 1)) return
+      setBusy(true)
+      const saved = await apiClient.updateHand({ ...currentHand, [boardKeys[street]]: value, analysisDirty: true })
+      setHand(saved)
+      showNotice(`${streetLabels[street]}已发出，可以继续录入行动`)
+      setBusy(false)
+    }
+
+    const renderBoardGate = (street: BoardStreet) => {
+      const value = boardValues[street]
+      const isComplete = hasCompleteCards(value, 1)
+      return (
+        <div className={isComplete ? 'street-board-card ready' : 'street-board-card'}>
+          <div>
+            <strong>{streetLabels[street]}牌面</strong>
+            <span>{isComplete ? <CardDisplay value={value} /> : `添加${streetLabels[street]}后再录入该街行动`}</span>
+          </div>
+          <CardPickerGroup count={1} label={streetLabels[street]} value={value} onChange={(nextValue) => saveBoardCard(street, nextValue)} allowEmpty optionalCollapsed />
+        </div>
+      )
+    }
+
+    const renderStreetAnalysisButton = (street: Street, streetActions: HandAction[], boardBlocked: boolean) => (
+      <button className="primary-action street-analysis-button" type="button" onClick={() => analyzeStreet(street)} disabled={busy || boardBlocked || streetActions.length === 0}>
+        {busy ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />}
+        分析{streetLabels[street]}
+      </button>
+    )
+
+    const renderPlayerActionCard = (street: Street, player: HandPlayer, existingAction?: HandAction) => {
+      const key = actionDraftKey(street, player.id)
+      const persistedDraft = existingAction
+        ? {
+            playerId: existingAction.playerId,
+            street: existingAction.street,
+            actionType: existingAction.actionType,
+            actionSize: existingAction.actionSize,
+            sizeUnit: existingAction.sizeUnit,
+          }
+        : undefined
+      const draft = actionDrafts[key] ?? persistedDraft ?? createActionDraft(street, player.id)
+      const needsSize = !nonSizingActionTypes.has(draft.actionType)
+      const isSelected = existingAction && selectedActionId === existingAction.id
+      const isEditing = existingAction && editingActionId === existingAction.id
+      return (
+        <article className={`player-action-card${isSelected ? ' selected' : ''}${isEditing ? ' editing' : ''}`} key={player.id}>
+          <div className="player-action-header">
+            <span className="action-position-badge">{positionLabels[player.position]}</span>
+            <button className="player-action-main" type="button" onClick={() => existingAction && setSelectedActionId(existingAction.id)} disabled={!existingAction}>
+              <strong>{player.name}</strong>
+              <span>{player.isHero ? 'Hero' : playerTypeLabels[player.playerType]} · {player.startingStack}BB</span>
+            </button>
+            <button className="icon-action compact" type="button" onClick={() => setViewingPlayerId(player.id)} aria-label={`查看${player.name}玩家信息`}>
+              <UserCircle size={17} />
+            </button>
+          </div>
+          <div className="action-editor-grid">
+            <label>
+              <span>行动</span>
+              <select
+                value={draft.actionType}
+                onChange={(event) => updateActionDraft(street, player.id, { actionType: event.target.value as ActionType }, persistedDraft)}
+              >
+                {actionTypeOptionsByStreet[street].map((item) => (
+                  <option key={item} value={item}>
+                    {actionTypeLabels[item]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>大小</span>
+              <input
+                disabled={!needsSize}
+                min={0}
+                step="0.1"
+                type="number"
+                value={needsSize ? draft.actionSize : 0}
+                onChange={(event) => updateActionDraft(street, player.id, { actionSize: Number(event.target.value) }, persistedDraft)}
+              />
+            </label>
+            <label>
+              <span>单位</span>
+              <select
+                disabled={!needsSize}
+                value={draft.sizeUnit}
+                onChange={(event) => updateActionDraft(street, player.id, { sizeUnit: event.target.value as SizeUnit }, persistedDraft)}
+              >
+                <option value="BB">BB</option>
+                <option value="ABSOLUTE">筹码量</option>
+                <option value="PERCENT">底池比例</option>
+              </select>
+            </label>
+          </div>
+          <div className="row-actions player-action-actions">
+            {existingAction && <span className={`status ${existingAction.analysisStatus.toLowerCase()}`}>{analysisStatusLabels[existingAction.analysisStatus]}</span>}
+            <button className="primary-action" type="button" onClick={() => savePlayerAction(street, player, existingAction)} disabled={busy}>
+              {existingAction ? <Save size={16} /> : <Plus size={16} />}
+              {isEditing ? '保存编辑' : existingAction ? '更新行动' : '保存行动'}
+            </button>
+          </div>
+        </article>
+      )
+    }
+
     return (
-      <section className="split-panel">
+      <section className="action-workspace">
         <div className="table-panel">
           <div className="section-heading">
             <div>
               <h2>4. 行动信息</h2>
-              <p>支持每个行动单独分析；编辑行动会清空旧分析并标记为待分析。</p>
+              <p>按街道和座位顺序记录行动，弃牌玩家不会进入后续街道。</p>
             </div>
           </div>
-          <div className="street-list">
-            {(['PREFLOP', 'FLOP', 'TURN', 'RIVER'] as Street[]).map((street) => {
-              const group = actions.filter((action) => action.street === street)
+          <div className="street-action-list">
+            {streetOrder.map((street) => {
+              const streetActions = sortedActions.filter((action) => action.street === street)
+              const streetPlayers = getPlayersForStreet(street, visiblePlayers, sortedActions, availablePositions)
+              const boardBlocked = (street === 'TURN' && !hasCompleteCards(currentHand.boardTurn, 1)) || (street === 'RIVER' && !hasCompleteCards(currentHand.boardRiver, 1))
+              return (
+                <article className={boardBlocked ? 'street-action-group gated' : 'street-action-group'} key={street}>
+                  <div className="street-action-header">
+                    <div>
+                      <strong>{streetLabels[street]}</strong>
+                      <span>
+                        {streetPlayers.length} 位可行动玩家 · 已记录 {streetActions.length} 个行动
+                      </span>
+                    </div>
+                    <div className="street-action-tools">
+                      {street !== 'PREFLOP' && streetPlayers.length < players.length && <span className="street-live-count">已过滤弃牌玩家</span>}
+                      {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
+                    </div>
+                  </div>
+                  {street === 'TURN' || street === 'RIVER' ? renderBoardGate(street) : null}
+                  {boardBlocked ? (
+                    <div className="empty-street">{streetLabels[street]}牌面完整后，该街行动会出现在这里。</div>
+                  ) : streetPlayers.length === 0 ? (
+                    <div className="empty-street">没有可进入{streetLabels[street]}的玩家。</div>
+                  ) : (
+                    <div className="player-action-grid">
+                      {streetPlayers.map((player) => renderPlayerActionCard(street, player, streetActions.find((action) => action.playerId === player.id)))}
+                    </div>
+                  )}
+                  <div className="street-action-footer">
+                    {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </div>
+        <aside className="side-form action-history-panel">
+          <div className="section-heading compact-heading">
+            <div>
+              <h2>已记录行动</h2>
+              <p>{actions.length === 0 ? '还没有保存任何行动。' : '可选择行动进行分析、编辑或删除。'}</p>
+            </div>
+          </div>
+          <div className="street-list action-history-list">
+            {streetOrder.map((street) => {
+              const group = sortedActions.filter((action) => action.street === street)
               return (
                 <article className="street-group" key={street}>
                   <div className="street-header">
@@ -1605,6 +1840,7 @@ function App() {
                   ) : (
                     group.map((action) => {
                       const player = players.find((item) => item.id === action.playerId)
+                      const hasSize = !nonSizingActionTypes.has(action.actionType)
                       return (
                         <article className={selectedActionId === action.id ? 'action-row selected' : 'action-row'} key={action.id}>
                           <button className="action-select" type="button" onClick={() => setSelectedActionId(action.id)}>
@@ -1614,7 +1850,8 @@ function App() {
                                 {player?.name ?? '未知玩家'} · {player?.position ?? '-'}
                               </strong>
                               <small>
-                                {actionTypeLabels[action.actionType]} · {action.actionSize} {sizeUnitLabels[action.sizeUnit]}
+                                {actionTypeLabels[action.actionType]}
+                                {hasSize ? ` · ${action.actionSize} ${sizeUnitLabels[action.sizeUnit]}` : ''}
                               </small>
                             </span>
                             <span className={`status ${action.analysisStatus.toLowerCase()}`}>{analysisStatusLabels[action.analysisStatus]}</span>
@@ -1622,9 +1859,6 @@ function App() {
                           <span className="inline-actions">
                             <button type="button" onClick={() => editAction(action)} disabled={busy}>
                               编辑
-                            </button>
-                            <button type="button" onClick={() => analyzeAction(action.id)} disabled={busy}>
-                              分析
                             </button>
                             <button type="button" onClick={() => deleteAction(action.id)} disabled={busy}>
                               删除
@@ -1638,60 +1872,45 @@ function App() {
               )
             })}
           </div>
-        </div>
-        <form className="side-form" onSubmit={addOrUpdateAction}>
-          <h2>{editingActionId ? '编辑行动' : '添加行动'}</h2>
-          <label>
-            <span>玩家</span>
-            <select value={selectedActionPlayerId} onChange={(event) => setActionDraft({ ...actionDraft, playerId: event.target.value })}>
-              {visiblePlayers.map((player) => (
-                <option key={player.id} value={player.id}>
-                  {player.name} · {player.position}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="form-grid compact">
-            <label>
-              <span>街道</span>
-              <select value={actionDraft.street} onChange={(event) => setActionDraft({ ...actionDraft, street: event.target.value as Street })}>
-                {Object.keys(streetLabels).map((street) => (
-                  <option key={street} value={street}>
-                    {streetLabels[street as Street]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>行动类型</span>
-              <select value={actionDraft.actionType} onChange={(event) => setActionDraft({ ...actionDraft, actionType: event.target.value as ActionType })}>
-                {(['OPEN', 'CALL', 'RAISE', '3BET', '4BET', 'CHECK', 'BET', 'FOLD', 'ALLIN'] as ActionType[]).map((item) => (
-                  <option key={item} value={item}>
-                    {actionTypeLabels[item]}
-                  </option>
-                ))}
-              </select>
-            </label>
+        </aside>
+        {viewingPlayer && (
+          <div className="modal-scrim" role="presentation" onMouseDown={() => setViewingPlayerId(null)}>
+            <article className="player-modal player-info-modal" role="dialog" aria-modal="true" aria-labelledby="player-info-title" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h2 id="player-info-title">{viewingPlayer.name}</h2>
+                  <p>
+                    {positionLabels[viewingPlayer.position]} · {viewingPlayer.isHero ? 'Hero' : playerTypeLabels[viewingPlayer.playerType]}
+                  </p>
+                </div>
+                <button className="icon-action" type="button" onClick={() => setViewingPlayerId(null)} aria-label="关闭玩家信息弹窗">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="player-info-grid">
+                <div>
+                  <span>起始筹码</span>
+                  <strong>{viewingPlayer.startingStack}BB</strong>
+                </div>
+                <div>
+                  <span>玩家类型</span>
+                  <strong>{playerTypeLabels[viewingPlayer.playerType]}</strong>
+                </div>
+                <div>
+                  <span>底牌</span>
+                  <strong><CardDisplay value={viewingPlayer.holeCards || (viewingPlayer.isHero ? currentHand.heroCards : '')} /></strong>
+                </div>
+              </div>
+              <div className="logic-note player-info-note">
+                <UserCircle size={18} />
+                <div>
+                  <h3>范围备注</h3>
+                  <p>{viewingPlayer.rangeNotes || '暂无范围备注'}</p>
+                </div>
+              </div>
+            </article>
           </div>
-          <div className="form-grid compact">
-            <label>
-              <span>行动大小</span>
-              <input type="number" value={actionDraft.actionSize} onChange={(event) => setActionDraft({ ...actionDraft, actionSize: Number(event.target.value) })} />
-            </label>
-            <label>
-              <span>大小单位</span>
-              <select value={actionDraft.sizeUnit} onChange={(event) => setActionDraft({ ...actionDraft, sizeUnit: event.target.value as SizeUnit })}>
-                <option value="BB">BB</option>
-                <option value="PERCENT">底池比例</option>
-                <option value="ABSOLUTE">筹码量</option>
-              </select>
-            </label>
-          </div>
-          <button className="primary-action full" type="submit" disabled={busy || players.length === 0}>
-            <Plus size={18} />
-            {editingActionId ? '更新行动' : '添加行动'}
-          </button>
-        </form>
+        )}
       </section>
     )
   }
@@ -1753,13 +1972,10 @@ function App() {
           ) : (
             <div className="empty-state">
               <Bot size={22} />
-              <p>该行动还没有分析结果。点击“分析”或“分析整手牌”生成分析结果。</p>
-              {selectedAction && (
-                <button className="primary-action" type="button" onClick={() => analyzeAction(selectedAction.id)} disabled={busy}>
-                  <Sparkles size={18} />
-                  分析此行动
-                </button>
-              )}
+              <p>该行动还没有分析结果。回到行动信息，点击对应街道的“分析”生成结果。</p>
+              <button className="primary-action" type="button" onClick={() => goToReviewStep(3)} disabled={busy}>
+                回到行动信息
+              </button>
             </div>
           )}
           {currentHand.overallSuggestion && (
@@ -2130,92 +2346,76 @@ function App() {
   }
 
   function renderStats() {
+    const resultCount = analyzedActions.length + (currentHand.overallSuggestion ? 1 : 0)
     return (
-      <section className="page-panel">
+      <section className="page-panel ai-results-page">
         <div className="section-heading">
           <div>
-            <h2>统计分析</h2>
-            <p>覆盖 GTO 趋势、位置胜率、对手类型分布、各街行动分析统计。</p>
+            <h2>AI 结果保存页</h2>
+            <p>{resultCount === 0 ? '当前手牌还没有已保存的 AI 分析结果。' : `当前手牌已保存 ${resultCount} 条 AI 分析结果。`}</p>
           </div>
+          <button className="ghost-action" type="button" onClick={() => navigateToRoute({ section: 'review', reviewStep: 3 })}>
+            回到行动信息
+          </button>
         </div>
-        <div className="segmented">
-          {(['7D', '30D', '90D'] as const).map((range) => (
-            <button className={statsRange === range ? 'active' : ''} key={range} type="button" onClick={() => refreshStats(range)}>
-              {range}
-            </button>
-          ))}
-        </div>
-        {stats && (
-          <>
-            <div className="metric-cards">
-              <article>
-                <span>平均 GTO</span>
-                <strong>{stats.averageScore}</strong>
-              </article>
-              <article>
-                <span>复盘手牌</span>
-                <strong>{stats.reviewedHands}</strong>
-              </article>
-              <article>
-                <span>低分行动</span>
-                <strong>{stats.lowScoreActions}</strong>
-              </article>
-              <article>
-                <span>最佳位置</span>
-                <strong>{stats.bestPosition}</strong>
-              </article>
-            </div>
-            <div className="chart-grid">
-              <article>
-                <h2>GTO 评分趋势</h2>
-                <div className="bar-chart">
-                  {stats.trend.map((item) => (
-                    <div key={item.label}>
-                      <span style={{ height: `${item.score}%` }} />
-                      <small>{item.label}</small>
-                    </div>
-                  ))}
+        {resultCount === 0 ? (
+          <div className="empty-state">
+            <Bot size={22} />
+            <p>在“行动信息”里保存玩家行动后，点击对应街道的“分析”，结果会出现在这里。</p>
+          </div>
+        ) : (
+          <div className="ai-result-grid">
+            {currentHand.overallSuggestion && (
+              <button
+                className="ai-result-card"
+                type="button"
+                onClick={() => {
+                  setSelectedActionId(actions[0]?.id ?? '')
+                  navigateToRoute({ section: 'review', reviewStep: 4 })
+                }}
+              >
+                <div>
+                  <span>整手牌总结</span>
+                  <strong>{currentHand.overallSuggestion}</strong>
                 </div>
-              </article>
-              <article>
-                <h2>不同位置胜率</h2>
-                <div className="mistake-list">
-                  {stats.byPosition.map((item) => (
-                    <div key={item.position}>
-                      <strong>{item.position}</strong>
-                      <span>{item.winRate}%</span>
-                    </div>
-                  ))}
+                <div className="ai-result-metrics">
+                  <span>GTO {currentHand.overallGtoScore ?? '-'}</span>
+                  <span>全局建议</span>
                 </div>
-              </article>
-              <article>
-                <h2>对手类型分布</h2>
-                <div className="mistake-list">
-                  {stats.byOpponentType.map((item) => (
-                    <div key={item.playerType}>
-                      <strong>{playerTypeLabels[item.playerType]}</strong>
-                      <span>{item.count} 手牌</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-              <article>
-                <h2>各街行动分析统计</h2>
-                <div className="mistake-list">
-                  {stats.byStreet.map((item) => (
-                    <div key={item.street}>
-                      <strong>{streetLabels[item.street]}</strong>
-                      <span>{item.mistakes} 个低分行动</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            </div>
-          </>
+              </button>
+            )}
+            {analyzedActions.map((action) => {
+              const player = players.find((item) => item.id === action.playerId)
+              return (
+                <button
+                  className="ai-result-card"
+                  key={action.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedActionId(action.id)
+                    navigateToRoute({ section: 'review', reviewStep: 4 })
+                  }}
+                >
+                  <div>
+                    <span>
+                      {streetLabels[action.street]} · {player?.position ?? '-'} · {player?.name ?? '未知玩家'}
+                    </span>
+                    <strong>{action.analysis?.oneLineConclusion}</strong>
+                  </div>
+                  <div className="ai-result-metrics">
+                    <span>GTO {action.analysis?.gtoScore}</span>
+                    <span>EV {action.analysis?.evValue}</span>
+                    <span>{actionTypeLabels[action.actionType]}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         )}
       </section>
     )
   }
+
 }
 
 function AnalysisBlock({ title, text, highlight = false }: { title: string; text: string; highlight?: boolean }) {
