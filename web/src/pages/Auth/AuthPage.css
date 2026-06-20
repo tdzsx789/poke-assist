@@ -1,0 +1,11 @@
+.auth-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.55fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 1180px) {
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,134 @@
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.56fr) minmax(300px, 0.68fr);
+  gap: 14px;
+  max-width: 1480px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.main-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding-bottom: 0;
+}
+
+.review-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 18px -18px 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-strong);
+  background: rgba(248, 247, 241, 0.96);
+  backdrop-filter: blur(16px);
+}
+
+.review-action-bar div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.review-action-bar strong {
+  color: var(--ink);
+}
+
+.review-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.step-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.step-card {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: inherit;
+  text-align: left;
+}
+
+.step-card div {
+  display: grid;
+  gap: 6px;
+}
+
+.step-card.current {
+  border-left: 4px solid var(--accent);
+  background: #f2fbf6;
+}
+
+.step-card.done svg,
+.step-card.current svg {
+  color: var(--accent);
+}
+
+.logic-note {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--field);
+}
+
+.logic-note div {
+  display: grid;
+  gap: 6px;
+}
+
+.logic-note svg {
+  color: var(--accent);
+}
+
+.flow-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 1480px;
+  margin: 14px auto 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+@media (max-width: 1180px) {
+  .review-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .review-action-bar,
+  .review-action-buttons {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-action-buttons {
+    width: 100%;
+  }
+}

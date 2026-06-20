@@ -1,0 +1,127 @@
+.hand-form,
+.street-list,
+.action-summary-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.hand-form,
+.street-list,
+.action-summary-grid {
+  margin-top: 18px;
+}
+
+.card-entry-layout {
+  display: grid;
+  gap: 10px;
+}
+
+.card-entry-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.hero-cards-entry {
+  border-color: rgba(29, 123, 83, 0.28);
+  background: linear-gradient(135deg, rgba(29, 123, 83, 0.1), rgba(255, 255, 255, 0.72));
+}
+
+.card-entry-section h3 {
+  flex: 0 0 auto;
+  width: 76px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.board-cards-entry {
+  align-items: flex-start;
+  background: var(--field);
+}
+
+.board-add-trigger {
+  flex: 1;
+  min-height: 76px;
+}
+
+.board-card-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.28fr) minmax(118px, 0.4fr) minmax(118px, 0.4fr);
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.card-street-entry {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(33, 44, 37, 0.11);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.card-street-entry > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .board-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .board-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .flop-card-entry {
+    grid-column: 1 / -1;
+  }
+
+  .board-cards-entry {
+    flex-direction: column;
+  }
+
+  .card-street-entry {
+    width: 100%;
+  }
+
+  .card-entry-section h3 {
+    width: auto;
+    line-height: 1.2;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero-cards-entry {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .turn-card-entry,
+  .river-card-entry {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .board-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .flop-card-entry {
+    grid-column: auto;
+  }
+}

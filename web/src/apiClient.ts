@@ -1,6 +1,8 @@
 import { mockApi } from './mockApi'
 import type {
   ActionAnalysis,
+  ActionCoachRequest,
+  ActionCoachResult,
   ActionDraft,
   ActionType,
   AuthState,
@@ -555,6 +557,14 @@ export const apiClient = {
       },
       () => mockApi.analyzeHand(),
     )
+  },
+
+  async getActionAdvice(payload: ActionCoachRequest): Promise<ActionCoachResult> {
+    return mockApi.getActionAdvice(payload)
+  },
+
+  async reviewActionLine(payload: ActionCoachRequest): Promise<ActionCoachResult> {
+    return mockApi.reviewActionLine(payload)
   },
 
   listOpponents: mockApi.listOpponents,

@@ -1,0 +1,11 @@
+.subheading {
+  margin-top: 18px;
+}
+
+.evaluation-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}

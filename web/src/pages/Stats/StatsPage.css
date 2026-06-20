@@ -1,0 +1,70 @@
+.ai-results-page {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.ai-result-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-result-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: inherit;
+  text-align: left;
+}
+
+.ai-result-card:hover {
+  border-color: var(--accent);
+  background: #f2fbf6;
+}
+
+.ai-result-card > div:first-child {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ai-result-card span,
+.ai-result-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.ai-result-card strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.ai-result-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ai-result-metrics span {
+  padding: 5px 8px;
+  border: 1px solid rgba(29, 123, 83, 0.22);
+  background: #f2fbf6;
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .ai-result-card {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-result-metrics {
+    justify-content: flex-start;
+  }
+}

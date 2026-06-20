@@ -1,0 +1,40 @@
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 180px 160px auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 18px;
+}
+
+.filter-bar.expanded {
+  grid-template-columns: minmax(240px, 1fr) repeat(6, minmax(130px, 0.65fr)) auto auto;
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+
+.input-with-icon input {
+  padding-left: 38px;
+}
+
+@media (max-width: 1180px) {
+  .filter-bar.expanded {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .filter-bar,
+  .filter-bar.expanded {
+    grid-template-columns: 1fr;
+  }
+}

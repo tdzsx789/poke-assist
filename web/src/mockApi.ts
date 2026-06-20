@@ -107,6 +107,30 @@ export type ActionDraft = {
   sizeUnit: SizeUnit
 }
 
+export type ActionCoachRequest = {
+  street: Street
+  playerId: string
+  playerName: string
+  playerType: PlayerType
+  position: Position
+  startingStack: number
+  previousSize?: number
+  actionType?: ActionType
+  actionSize?: number
+  sizeUnit?: SizeUnit
+  gameType?: GameType
+}
+
+export type ActionCoachResult = {
+  mode: 'SUGGEST' | 'REVIEW'
+  headline: string
+  primaryText: string
+  secondaryText: string
+  recommendedAction?: ActionType
+  recommendedSize?: number
+  sizeUnit?: SizeUnit
+}
+
 export type HandAction = ActionDraft & {
   id: string
   handId: string
@@ -281,10 +305,10 @@ let hand: HandInfo = {
   bigBlind: 200,
   ante: '',
   effectiveStack: 35,
-  boardFlop: '黑桃J 方块7 梅花2',
+  boardFlop: '',
   boardTurn: '',
   boardRiver: '',
-  heroCards: '红桃A 黑桃J',
+  heroCards: '红桃A 黑桃A',
   result: 'Hero won / lost / unknown',
   rawHistory: '可粘贴平台导出的完整 hand history，系统后续可自动拆出玩家和行动。',
   analysisDirty: false,
@@ -330,7 +354,7 @@ let players: HandPlayer[] = [
     playerType: 'GTO',
     startingStack: 35,
     isHero: true,
-    holeCards: '红桃A 黑桃J',
+    holeCards: '红桃A 黑桃A',
     rangeNotes: 'BTN 标准 open 范围。',
   },
   {
@@ -384,8 +408,8 @@ let actions: HandAction[] = [
       evValue: 15.2,
       gtoScore: 86,
       optimalAction: 'OPEN',
-      suggestion: 'BTN 红桃A黑桃J 是标准开池，尺度合理。',
-      rangeAnalysis: 'BTN open 范围可覆盖大部分 A 同花组合、Broadway 和中高对子，红桃A黑桃J 位于价值区间。',
+      suggestion: 'BTN 红桃A黑桃A 是标准价值开池，尺度合理。',
+      rangeAnalysis: 'BTN open 范围当然覆盖 AA，红桃A黑桃A 位于顶端价值区间。',
       betSizingReview: '2.2BB 在 FT 有效筹码 35BB 时合理，能降低被 3-bet 的损失。',
       exploitAdjustment: '若盲位过度弃牌，可以扩大 open 范围并保持小尺度。',
       icmImpact: 'FT 阶段避免使用过大 open 尺度，保留后手弹性。',
@@ -411,11 +435,11 @@ actions = actions.filter((action) => players.some((player) => player.id === acti
 let handSummaries: HandSummary[] = [
   {
     id: hand.id,
-    title: 'FT 红桃A黑桃J BTN open vs SB call',
+    title: 'FT 红桃A黑桃A BTN open vs SB call',
     gameType: hand.gameType,
     stage: hand.tournamentStage,
     heroCards: hand.heroCards,
-    board: `${hand.boardFlop} · ${hand.boardTurn} · ${hand.boardRiver}`,
+    board: `${hand.boardFlop || '-'} · ${hand.boardTurn || '-'} · ${hand.boardRiver || '-'}`,
     opponentType: 'TIGHT_PASSIVE',
     score: 78,
     lowestAction: 'Turn raise',
@@ -582,6 +606,137 @@ const syncCurrentHandSummary = () => {
 const markAnalysisDirty = () => {
   hand = { ...hand, analysisDirty: true, updatedAt: new Date().toISOString() }
   syncCurrentHandSummary()
+}
+
+const mockActionTypeLabels: Record<ActionType, string> = {
+  OPEN: '开池',
+  CALL: '跟注',
+  RAISE: '加注',
+  '3BET': '再加注',
+  '4BET': '四次加注',
+  CHECK: '过牌',
+  BET: '下注',
+  FOLD: '弃牌',
+  ALLIN: '全下',
+}
+
+const mockPositionLabels: Record<Position, string> = {
+  UTG: 'UTG',
+  UTG1: 'UTG+1',
+  UTG2: 'UTG+2',
+  LJ: 'LJ',
+  HJ: 'HJ',
+  CO: 'CO',
+  BTN: 'Button',
+  SB: 'SB',
+  BB: 'BB',
+}
+
+const mockPlayerTypeLabels: Record<PlayerType, string> = {
+  TIGHT_AGGRESSIVE: '紧凶',
+  LOOSE_AGGRESSIVE: '松凶',
+  TIGHT_PASSIVE: '紧弱',
+  LOOSE_PASSIVE: '松弱',
+  GTO: 'GTO',
+  UNKNOWN: '未知',
+}
+
+const mockStreetLabels: Record<Street, string> = {
+  PREFLOP: '翻前',
+  FLOP: '翻牌',
+  TURN: '转牌',
+  RIVER: '河牌',
+}
+
+const formatCoachSize = (size: number, unit: SizeUnit = 'BB') => {
+  const normalized = Number.isFinite(size) ? Number(size.toFixed(1)) : 0
+  if (normalized <= 0) return ''
+  return unit === 'ABSOLUTE' ? `${normalized}筹码` : `${normalized}${unit}`
+}
+
+const buildActionAdvice = (request: ActionCoachRequest): ActionCoachResult => {
+  const isShortStack = request.startingStack <= 10
+  const hasPreviousBet = Boolean(request.previousSize && request.previousSize > 0)
+  let recommendedAction: ActionType
+  let recommendedSize: number
+
+  if (isShortStack) {
+    recommendedAction = 'ALLIN'
+    recommendedSize = request.startingStack
+  } else if (request.street === 'PREFLOP') {
+    if (hasPreviousBet) {
+      if (request.playerType === 'LOOSE_AGGRESSIVE' || request.position === 'BTN' || request.position === 'CO') {
+        recommendedAction = 'RAISE'
+        recommendedSize = Number(((request.previousSize ?? 2.2) * 2.5).toFixed(1))
+      } else {
+        recommendedAction = 'CALL'
+        recommendedSize = Number((request.previousSize ?? 2.2).toFixed(1))
+      }
+    } else if (request.position === 'BTN' || request.position === 'CO' || request.playerType === 'TIGHT_AGGRESSIVE' || request.playerType === 'LOOSE_AGGRESSIVE') {
+      recommendedAction = 'RAISE'
+      recommendedSize = 2.2
+    } else {
+      recommendedAction = 'FOLD'
+      recommendedSize = 0
+    }
+  } else if (hasPreviousBet) {
+    if (request.playerType === 'LOOSE_AGGRESSIVE') {
+      recommendedAction = 'RAISE'
+      recommendedSize = Number(((request.previousSize ?? 1) * 2.4).toFixed(1))
+    } else {
+      recommendedAction = 'CALL'
+      recommendedSize = Number((request.previousSize ?? 1).toFixed(1))
+    }
+  } else {
+    recommendedAction = request.playerType === 'TIGHT_PASSIVE' ? 'CALL' : 'RAISE'
+    recommendedSize = 1
+  }
+
+  const sizeText = formatCoachSize(recommendedSize)
+  return {
+    mode: 'SUGGEST',
+    headline: `建议：${mockActionTypeLabels[recommendedAction]}${sizeText ? ` ${sizeText}` : ''}`,
+    primaryText:
+      recommendedAction === 'FOLD'
+        ? '当前位次和对手画像下，先保留范围更稳。'
+        : recommendedAction === 'ALLIN'
+          ? '有效筹码较浅，直接把决策简化成全下会更直接。'
+          : '当前更适合主动争夺权益，先按进攻线处理更顺。 ',
+    secondaryText: `${mockStreetLabels[request.street]} · ${mockPositionLabels[request.position]} · ${mockPlayerTypeLabels[request.playerType]}。这是基于位置、筹码和前位尺度的 mock AI 建议，后面可以替换成真实模型。`,
+    recommendedAction,
+    recommendedSize,
+    sizeUnit: 'BB',
+  }
+}
+
+const buildActionReview = (request: ActionCoachRequest): ActionCoachResult => {
+  const actionType = request.actionType ?? 'FOLD'
+  const actionSize = request.actionSize ?? 0
+  const sizeUnit = request.sizeUnit ?? 'BB'
+  const sizeText = formatCoachSize(actionSize, sizeUnit)
+  let headline = '复核：当前路线可行'
+  let secondaryText = '当前选择和已录入信息基本匹配，后续重点看对手真实样本与后续街道延续性。'
+
+  if (actionType === 'ALLIN' && request.startingStack > 18) {
+    headline = '复核：这条线偏激进'
+    secondaryText = '当前后手还比较深，直接全下会压缩可盈利的中间尺度，通常需要更强理由。'
+  } else if (actionType === 'RAISE' && request.previousSize && actionSize < request.previousSize * 2) {
+    headline = '复核：加注尺度偏小'
+    secondaryText = '当前加注没有把前位压力拉开，容易给后位留下过于舒服的继续空间。'
+  } else if (actionType === 'CALL' && request.previousSize) {
+    headline = '复核：跟注线可接受'
+    secondaryText = '默认跟到前位尺度是合理起点，但要确认你愿不愿意保留后续街的被动结构。'
+  } else if (actionType === 'FOLD' && (request.position === 'BTN' || request.position === 'CO')) {
+    headline = '复核：这条线偏保守'
+    secondaryText = '后位本来有更多可操作空间，直接弃牌通常会损失一部分可进攻频率。'
+  }
+
+  return {
+    mode: 'REVIEW',
+    headline,
+    primaryText: `已选择 ${mockActionTypeLabels[actionType]}${sizeText ? ` ${sizeText}` : ''}。`,
+    secondaryText,
+  }
 }
 
 const buildAnalysis = (action: HandAction): ActionAnalysis => {
@@ -918,6 +1073,16 @@ export const mockApi = {
     }
     syncCurrentHandSummary()
     return clone({ hand, actions })
+  },
+
+  async getActionAdvice(payload: ActionCoachRequest) {
+    await wait(420)
+    return clone(buildActionAdvice(payload))
+  },
+
+  async reviewActionLine(payload: ActionCoachRequest) {
+    await wait(420)
+    return clone(buildActionReview(payload))
   },
 
   async listOpponents() {

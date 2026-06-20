@@ -1,0 +1,22 @@
+.analysis-block {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.analysis-block.highlight {
+  border-left: 4px solid var(--accent);
+}
+
+.analysis-block div {
+  display: grid;
+  gap: 6px;
+}
+
+.analysis-block svg {
+  color: var(--accent);
+}
