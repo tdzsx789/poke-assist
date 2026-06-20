@@ -756,6 +756,14 @@ export const mockApi = {
   async updateHand(payload: HandInfo) {
     await wait()
     hand = { ...payload, analysisDirty: true, updatedAt: new Date().toISOString() }
+    const availableStreets: Street[] = ['PREFLOP']
+    const flopReady = hand.boardFlop.split(/\s+/).filter(Boolean).length === 3
+    const turnReady = hand.boardTurn.split(/\s+/).filter(Boolean).length === 1
+    const riverReady = hand.boardRiver.split(/\s+/).filter(Boolean).length === 1
+    if (flopReady) availableStreets.push('FLOP')
+    if (flopReady && turnReady) availableStreets.push('TURN')
+    if (flopReady && turnReady && riverReady) availableStreets.push('RIVER')
+    actions = actions.filter((action) => availableStreets.includes(action.street))
     syncCurrentHandSummary()
     return clone(hand)
   },

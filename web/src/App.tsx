@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { FormEvent } from 'react'
 import {
   Bot,
   Brain,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   X,
@@ -64,6 +65,7 @@ type CardRank = 'A' | 'K' | 'Q' | 'J' | '10' | '9' | '8' | '7' | '6' | '5' | '4'
 type CardValue = `${CardSuit}${CardRank}` | ''
 type RouteState = { section: SectionKey; reviewStep: ReviewStep }
 type DealtStreet = Extract<Street, 'FLOP' | 'TURN' | 'RIVER'>
+type SelectOption<Value extends string | number> = { value: Value; label: string; disabled?: boolean }
 
 const navItems: Array<{ key: SectionKey; label: string; icon: typeof Brain }> = [
   { key: 'auth', label: '用户中心', icon: UserCircle },
@@ -147,6 +149,10 @@ const playerTypeLabels: Record<PlayerType, string> = {
   GTO: 'GTO',
   UNKNOWN: '未知',
 }
+const playerTypeOptions: SelectOption<PlayerType>[] = (Object.entries(playerTypeLabels) as Array<[PlayerType, string]>).map(([value, label]) => ({
+  value,
+  label,
+}))
 
 const gameTypeLabels: Record<GameType, string> = {
   TOURNAMENT: '锦标赛',
@@ -206,6 +212,11 @@ const strategyOutcomeLabels: Record<StrategyOutcome, string> = {
   LOSS: '亏损',
   DRAW: '持平',
 }
+const strategyOutcomeOptions: SelectOption<StrategyOutcome>[] = [
+  { value: 'WIN', label: strategyOutcomeLabels.WIN },
+  { value: 'LOSS', label: strategyOutcomeLabels.LOSS },
+  { value: 'DRAW', label: strategyOutcomeLabels.DRAW },
+]
 
 const boardTextureLabels: Record<string, string> = {
   ANY: '不限牌面',
@@ -224,6 +235,14 @@ const positionLabels: Record<Position, string> = {
   SB: 'SB',
   BB: 'BB',
 }
+const adjustmentTypeOptions: SelectOption<AdjustmentType>[] = (['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'GENERAL'] as AdjustmentType[]).map((value) => ({
+  value,
+  label: adjustmentTypeLabels[value],
+}))
+const adjustmentScopeOptions: SelectOption<AdjustmentScope>[] = (['OPEN', '3BET', 'CALL', 'BET', 'RAISE', 'CHECK', 'FOLD'] as AdjustmentScope[]).map((value) => ({
+  value,
+  label: adjustmentScopeLabels[value],
+}))
 
 const tablePositions: Record<TableSize, Position[]> = {
   2: ['BTN', 'BB'],
@@ -239,6 +258,20 @@ const preflopActionPositions: Position[] = ['UTG', 'UTG1', 'UTG2', 'LJ', 'HJ', '
 const postflopActionPositions: Position[] = ['SB', 'BB', 'UTG', 'UTG1', 'UTG2', 'LJ', 'HJ', 'CO', 'BTN']
 const tableSizeOptions: TableSize[] = [2, 3, 4, 5, 6, 7, 8, 9]
 const toTableSize = (value: number): TableSize => (tableSizeOptions.includes(value as TableSize) ? (value as TableSize) : 6)
+const gameTypeOptions: SelectOption<GameType>[] = [
+  { value: 'TOURNAMENT', label: '锦标赛' },
+  { value: 'CASH', label: '现金局' },
+]
+const tournamentStageOptions: SelectOption<TournamentStage>[] = [
+  { value: 'EARLY', label: tournamentStageLabels.EARLY },
+  { value: 'BUBBLE', label: tournamentStageLabels.BUBBLE },
+  { value: 'ITM', label: tournamentStageLabels.ITM },
+  { value: 'FT', label: tournamentStageLabels.FT },
+]
+const sizeUnitOptions: SelectOption<SizeUnit>[] = [
+  { value: 'BB', label: 'BB' },
+  { value: 'ABSOLUTE', label: '筹码量' },
+]
 
 const streetLabels: Record<Street, string> = {
   PREFLOP: '翻前',
@@ -246,26 +279,27 @@ const streetLabels: Record<Street, string> = {
   TURN: '转牌',
   RIVER: '河牌',
 }
-const streetOrder: Street[] = ['PREFLOP', 'FLOP', 'TURN', 'RIVER']
 const previousStreets: Record<Street, Street[]> = {
   PREFLOP: [],
   FLOP: ['PREFLOP'],
   TURN: ['PREFLOP', 'FLOP'],
   RIVER: ['PREFLOP', 'FLOP', 'TURN'],
 }
+const dealtStreetOrder: DealtStreet[] = ['FLOP', 'TURN', 'RIVER']
 const actionTypeOptionsByStreet: Record<Street, ActionType[]> = {
-  PREFLOP: ['FOLD', 'CHECK', 'OPEN', 'CALL', 'RAISE', '3BET', '4BET', 'ALLIN'],
-  FLOP: ['CHECK', 'BET', 'CALL', 'RAISE', 'FOLD', 'ALLIN'],
-  TURN: ['CHECK', 'BET', 'CALL', 'RAISE', 'FOLD', 'ALLIN'],
-  RIVER: ['CHECK', 'BET', 'CALL', 'RAISE', 'FOLD', 'ALLIN'],
+  PREFLOP: ['FOLD', 'CALL', 'RAISE', 'ALLIN'],
+  FLOP: ['FOLD', 'CALL', 'RAISE', 'ALLIN'],
+  TURN: ['FOLD', 'CALL', 'RAISE', 'ALLIN'],
+  RIVER: ['FOLD', 'CALL', 'RAISE', 'ALLIN'],
 }
 const defaultActionTypeByStreet: Record<Street, ActionType> = {
   PREFLOP: 'FOLD',
-  FLOP: 'CHECK',
-  TURN: 'CHECK',
-  RIVER: 'CHECK',
+  FLOP: 'FOLD',
+  TURN: 'FOLD',
+  RIVER: 'FOLD',
 }
-const nonSizingActionTypes = new Set<ActionType>(['FOLD', 'CHECK'])
+const nonSizingActionTypes = new Set<ActionType>(['FOLD'])
+const lockedSizingActionTypes = new Set<ActionType>(['ALLIN'])
 
 const suitOptions: CardSuit[] = ['黑桃', '红桃', '方块', '梅花']
 const rankOptions: CardRank[] = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2']
@@ -312,7 +346,50 @@ const getPlayersForStreet = (street: Street, players: HandPlayer[], actions: Han
   const streetPositions = actionPositions.filter((position) => positions.includes(position))
   return sortPlayersByPosition(players.filter((player) => !foldedPlayerIds.has(player.id)), streetPositions)
 }
+
+const normalizeActionType = (actionType: ActionType): ActionType => {
+  if (actionType === 'OPEN' || actionType === 'BET' || actionType === '3BET' || actionType === '4BET') return 'RAISE'
+  if (actionType === 'CHECK') return 'CALL'
+  return actionType
+}
+
+const getAvailableStreets = (handInfo: HandInfo): Street[] => {
+  const streets: Street[] = ['PREFLOP']
+  if (hasCompleteCards(handInfo.boardFlop, 3)) streets.push('FLOP')
+  if (hasCompleteCards(handInfo.boardFlop, 3) && hasCompleteCards(handInfo.boardTurn, 1)) streets.push('TURN')
+  if (hasCompleteCards(handInfo.boardFlop, 3) && hasCompleteCards(handInfo.boardTurn, 1) && hasCompleteCards(handInfo.boardRiver, 1)) streets.push('RIVER')
+  return streets
+}
+
+const getAllowedActionsForHand = (handInfo: HandInfo, currentActions: HandAction[]) => {
+  const availableStreets = new Set(getAvailableStreets(handInfo))
+  return currentActions.filter((action) => availableStreets.has(action.street))
+}
+
 const getDefaultActionSize = (street: Street, actionType: ActionType) => (nonSizingActionTypes.has(actionType) ? 0 : street === 'PREFLOP' ? 2.2 : 1)
+const getPreviousActionSize = (street: Street, playerId: string, players: HandPlayer[], actions: HandAction[], positions: Position[]) => {
+  const streetActions = actions.filter((action) => action.street === street)
+  const playerOrder = getPlayersForStreet(street, players, actions, positions)
+  const playerIndex = playerOrder.findIndex((item) => item.id === playerId)
+  const previousPlayer = playerIndex > 0 ? playerOrder[playerIndex - 1] : null
+  const previousAction = previousPlayer ? streetActions.find((action) => action.playerId === previousPlayer.id) : undefined
+  return previousAction && !nonSizingActionTypes.has(normalizeActionType(previousAction.actionType)) ? previousAction.actionSize : undefined
+}
+
+const getResolvedActionSize = (
+  street: Street,
+  actionType: ActionType,
+  currentSize: number,
+  playerStack: number,
+  previousSize?: number,
+) => {
+  const normalizedActionType = normalizeActionType(actionType)
+  if (normalizedActionType === 'FOLD') return 0
+  if (normalizedActionType === 'ALLIN') return playerStack
+  if (normalizedActionType === 'CALL') return (previousSize ?? currentSize) || getDefaultActionSize(street, normalizedActionType)
+  return currentSize || getDefaultActionSize(street, normalizedActionType)
+}
+
 const createActionDraft = (street: Street, playerId = '', actionType = defaultActionTypeByStreet[street]): ActionDraft => ({
   playerId,
   street,
@@ -489,7 +566,9 @@ function App() {
     if (!hand) return '手牌信息尚未加载完成'
     if (!hand.handName.trim()) return '请填写手牌名称，手牌名称为必选项'
     if (hand.smallBlind === '' || hand.bigBlind === '') return '请填写小盲和大盲，ante 可不填'
-    if (!hasCompleteCards(hand.boardFlop, 3)) return '请完整选择翻牌面 3 张公共牌，转牌和河牌可不填'
+    if (splitCards(hand.boardFlop).length > 0 && !hasCompleteCards(hand.boardFlop, 3)) return '若填写公共牌，请完整选择翻牌面 3 张牌'
+    if (splitCards(hand.boardTurn).length > 0 && !hasCompleteCards(hand.boardTurn, 1)) return '若填写转牌，请完整选择 1 张牌'
+    if (splitCards(hand.boardRiver).length > 0 && !hasCompleteCards(hand.boardRiver, 1)) return '若填写河牌，请完整选择 1 张牌'
     return ''
   }
   const getTableValidationMessage = () => {
@@ -574,7 +653,13 @@ function App() {
       return
     }
     setBusy(true)
-    const saved = hand.id ? await apiClient.updateHand(hand) : await apiClient.createHand(hand)
+    const allowedActions = getAllowedActionsForHand(hand, actions)
+    if (allowedActions.length !== actions.length) {
+      setActions(allowedActions)
+      setSelectedActionId((current) => (allowedActions.some((action) => action.id === current) ? current : allowedActions[0]?.id ?? ''))
+    }
+    const savedHand = hand.id ? await apiClient.updateHand(hand) : await apiClient.createHand(hand)
+    const saved = { ...savedHand, analysisDirty: true }
     setHand(saved)
     navigateToRoute({ section: 'review', reviewStep: 3 })
     showNotice('手牌信息已保存，分析结果已标记为需重新分析')
@@ -748,12 +833,13 @@ function App() {
     const key = actionDraftKey(street, playerId)
     setActionDrafts((current) => {
       const base = current[key] ?? fallback ?? createActionDraft(street, playerId)
-      const nextActionType = patch.actionType ?? base.actionType
+      const nextActionType = patch.actionType ? normalizeActionType(patch.actionType) : normalizeActionType(base.actionType)
       const next = {
         ...base,
         ...patch,
         playerId,
         street,
+        actionType: nextActionType,
       }
       if (patch.actionType && patch.actionSize === undefined) {
         next.actionSize = getDefaultActionSize(street, nextActionType)
@@ -765,12 +851,15 @@ function App() {
   const savePlayerAction = async (street: Street, player: HandPlayer, existingAction?: HandAction) => {
     const key = actionDraftKey(street, player.id)
     const draft = actionDrafts[key] ?? (existingAction ? { ...existingAction } : createActionDraft(street, player.id))
+    const normalizedActionType = normalizeActionType(draft.actionType)
+    const previousSize = getPreviousActionSize(street, player.id, visiblePlayers, actions, availablePositions)
+    const resolvedActionSize = getResolvedActionSize(street, normalizedActionType, Number(draft.actionSize), player.startingStack, previousSize)
     const payload: ActionDraft = {
       playerId: player.id,
       street,
-      actionType: draft.actionType,
-      actionSize: nonSizingActionTypes.has(draft.actionType) ? 0 : Number(draft.actionSize) || getDefaultActionSize(street, draft.actionType),
-      sizeUnit: draft.sizeUnit,
+      actionType: normalizedActionType,
+      actionSize: resolvedActionSize,
+      sizeUnit: draft.sizeUnit === 'PERCENT' ? 'BB' : draft.sizeUnit,
     }
     setBusy(true)
     const result = existingAction ? await apiClient.updateAction(existingAction.id, payload) : await apiClient.addAction(payload)
@@ -1306,15 +1395,20 @@ function App() {
             </div>
             <label>
               <span>选择牌桌模板</span>
-              <select value={selectedTableTemplateId} onChange={(event) => setSelectedTableTemplateId(event.target.value)} disabled={busy || tableTemplates.length === 0}>
-                {tableTemplates.length === 0 ? (
-                  <option value="">暂无保存的牌桌</option>
-                ) : tableTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} · {template.tableSize} 人 · {template.players.length} 位玩家
-                  </option>
-                ))}
-              </select>
+              <SelectField
+                ariaLabel="选择牌桌模板"
+                disabled={busy || tableTemplates.length === 0}
+                options={
+                  tableTemplates.length === 0
+                    ? [{ value: '', label: '暂无保存的牌桌', disabled: true }]
+                    : tableTemplates.map((template) => ({
+                        value: template.id,
+                        label: `${template.name} · ${template.tableSize} 人 · ${template.players.length} 位玩家`,
+                      }))
+                }
+                value={selectedTableTemplateId}
+                onChange={setSelectedTableTemplateId}
+              />
             </label>
             <button className="ghost-action full" type="button" onClick={() => loadSavedTable(selectedTableTemplateId || (tableTemplates[0]?.id ?? ''))} disabled={busy || tableTemplates.length === 0}>
               <Library size={18} />
@@ -1354,20 +1448,16 @@ function App() {
             <div className="form-grid">
               <label>
                 <span>游戏类型</span>
-                <select value={currentHand.gameType} onChange={(event) => updateHand('gameType', event.target.value as GameType)}>
-                  <option value="TOURNAMENT">锦标赛</option>
-                  <option value="CASH">现金局</option>
-                </select>
+                <SelectField ariaLabel="游戏类型" options={gameTypeOptions} value={currentHand.gameType} onChange={(nextValue) => updateHand('gameType', nextValue)} />
               </label>
               <label>
                 <span>锦标赛阶段</span>
-                <select value={currentHand.tournamentStage} onChange={(event) => updateHand('tournamentStage', event.target.value as TournamentStage)}>
-                  {(['EARLY', 'BUBBLE', 'ITM', 'FT'] as TournamentStage[]).map((stage) => (
-                    <option key={stage} value={stage}>
-                      {tournamentStageLabels[stage]}
-                    </option>
-                  ))}
-                </select>
+                <SelectField
+                  ariaLabel="锦标赛阶段"
+                  options={tournamentStageOptions}
+                  value={currentHand.tournamentStage}
+                  onChange={(nextValue) => updateHand('tournamentStage', nextValue)}
+                />
               </label>
               <label>
                 <span>小盲</span>
@@ -1418,12 +1508,37 @@ function App() {
                 <h3>公共牌</h3>
                 <div className="board-card-grid">
                   <div className="card-street-entry flop-card-entry">
-                    <span>翻牌面 · 必填</span>
-                    <CardPickerGroup count={3} label="翻牌面" value={currentHand.boardFlop} onChange={(value) => updateHand('boardFlop', value)} />
+                    <span>翻牌面 · 选填</span>
+                    <CardPickerGroup
+                      count={3}
+                      label="翻牌面"
+                      value={currentHand.boardFlop}
+                      onChange={(value) => {
+                        updateHand('boardFlop', value)
+                        if (!hasCompleteCards(value, 3)) {
+                          updateHand('boardTurn', '')
+                          updateHand('boardRiver', '')
+                        }
+                      }}
+                      allowEmpty
+                      optionalCollapsed
+                    />
                   </div>
                   <div className="card-street-entry turn-card-entry">
                     <span>转牌 · 选填</span>
-                    <CardPickerGroup count={1} label="转牌" value={currentHand.boardTurn} onChange={(value) => updateHand('boardTurn', value)} allowEmpty optionalCollapsed />
+                    <CardPickerGroup
+                      count={1}
+                      label="转牌"
+                      value={currentHand.boardTurn}
+                      onChange={(value) => {
+                        updateHand('boardTurn', value)
+                        if (!hasCompleteCards(value, 1)) {
+                          updateHand('boardRiver', '')
+                        }
+                      }}
+                      allowEmpty
+                      optionalCollapsed
+                    />
                   </div>
                   <div className="card-street-entry river-card-entry">
                     <span>河牌 · 选填</span>
@@ -1458,14 +1573,19 @@ function App() {
             {tableEntryMode === 'load' && (
               <label>
                 <span>载入已保存牌桌</span>
-                <select value={selectedTableTemplateId} onChange={(event) => applyTableTemplate(event.target.value)} disabled={busy}>
-                  <option value="">{tableTemplates.length === 0 ? '暂无保存的牌桌' : '自定义当前牌桌'}</option>
-                  {tableTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name} · {template.tableSize} 人 · {template.players.length} 位玩家
-                    </option>
-                  ))}
-                </select>
+                <SelectField
+                  ariaLabel="载入已保存牌桌"
+                  disabled={busy}
+                  options={[
+                    { value: '', label: tableTemplates.length === 0 ? '暂无保存的牌桌' : '自定义当前牌桌' },
+                    ...tableTemplates.map((template) => ({
+                      value: template.id,
+                      label: `${template.name} · ${template.tableSize} 人 · ${template.players.length} 位玩家`,
+                    })),
+                  ]}
+                  value={selectedTableTemplateId}
+                  onChange={applyTableTemplate}
+                />
               </label>
             )}
             <button className="ghost-action" type="button" onClick={saveCurrentTableTemplate} disabled={busy || !isTableComplete}>
@@ -1476,13 +1596,12 @@ function App() {
           <div className="table-config-panel">
             <label>
               <span>桌人数</span>
-              <select value={tableSize} onChange={(event) => changeTableSize(Number(event.target.value) as TableSize)}>
-                {tableSizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size} 人桌
-                  </option>
-                ))}
-              </select>
+              <SelectField
+                ariaLabel="桌人数"
+                options={tableSizeOptions.map((size) => ({ value: size, label: `${size} 人桌` }))}
+                value={tableSize}
+                onChange={(nextValue) => changeTableSize(nextValue as TableSize)}
+              />
             </label>
             <div>
               <strong>
@@ -1554,23 +1673,21 @@ function App() {
                   </label>
                   <label>
                     <span>位置</span>
-                    <select value={playerDraftPosition} onChange={(event) => setPlayerDraft({ ...playerDraft, position: event.target.value as Position })}>
-                      {availablePositions.map((item) => (
-                        <option key={item} value={item}>
-                          {positionLabels[item]}
-                        </option>
-                      ))}
-                    </select>
+                    <SelectField
+                      ariaLabel="位置"
+                      options={availablePositions.map((item) => ({ value: item, label: positionLabels[item] }))}
+                      value={playerDraftPosition}
+                      onChange={(nextValue) => setPlayerDraft({ ...playerDraft, position: nextValue as Position })}
+                    />
                   </label>
                   <label>
                     <span>玩家类型</span>
-                    <select value={playerDraft.playerType} onChange={(event) => setPlayerDraft({ ...playerDraft, playerType: event.target.value as PlayerType })}>
-                      {Object.entries(playerTypeLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                    <SelectField
+                      ariaLabel="玩家类型"
+                      options={playerTypeOptions}
+                      value={playerDraft.playerType}
+                      onChange={(nextValue) => setPlayerDraft({ ...playerDraft, playerType: nextValue as PlayerType })}
+                    />
                   </label>
                   <label>
                     <span>起始筹码 BB</span>
@@ -1607,6 +1724,7 @@ function App() {
   function renderActions() {
     const viewingPlayer = players.find((player) => player.id === viewingPlayerId)
     const sortedActions = [...actions].sort((first, second) => first.actionOrder - second.actionOrder)
+    const activeStreetOrder = getAvailableStreets(currentHand)
     const streetCardValues: Record<Street, string> = {
       PREFLOP: '',
       FLOP: currentHand.boardFlop,
@@ -1638,7 +1756,7 @@ function App() {
     const renderStreetBoardEditor = (street: DealtStreet, forceOpen = false) => {
       const value = streetCardValues[street]
       const isComplete = hasCompleteCards(value, boardCardCounts[street])
-      const isEditing = forceOpen || editingBoardStreet === street || !isComplete
+      const isEditing = forceOpen || editingBoardStreet === street
       return (
         isEditing && (
           <div className={isComplete ? 'street-board-card ready editing' : 'street-board-card editing'}>
@@ -1673,22 +1791,78 @@ function App() {
       </button>
     )
 
+    const renderStreetBoardToggle = (street: DealtStreet) => (
+      <button
+        className="ghost-action street-board-toggle"
+        type="button"
+        onClick={() => setEditingBoardStreet((current) => (current === street ? null : street))}
+      >
+        添加
+      </button>
+    )
+
+    const renderBoardAddPrompts = () => (
+      dealtStreetOrder.map((street) => {
+        const isComplete = hasCompleteCards(streetCardValues[street], boardCardCounts[street])
+        const hasStage = activeStreetOrder.includes(street)
+        const isEditing = editingBoardStreet === street
+        const showPrompt = !hasStage || isEditing
+        if (!showPrompt) return null
+        return (
+          <article className="street-action-group gated next-board-street-group" key={`next-board-${street}`}>
+            <div className="street-action-header">
+              <div className="street-action-title">
+                <strong>{streetLabels[street]}</strong>
+              </div>
+            </div>
+            <div className="empty-street">
+              <button
+                className="optional-card-add street-board-add-button"
+                type="button"
+                onClick={() => setEditingBoardStreet((current) => (current === street ? null : street))}
+              >
+                添加
+              </button>
+            </div>
+            {isEditing ? renderStreetBoardEditor(street, true) : null}
+            {!isEditing && isComplete ? (
+              <div className="street-board-inline-preview">
+                <button
+                  className="street-dealt-cards"
+                  type="button"
+                  aria-label={`编辑${streetLabels[street]}牌面`}
+                  onClick={() => setEditingBoardStreet(street)}
+                >
+                  <CardDisplay value={streetCardValues[street]} />
+                </button>
+              </div>
+            ) : null}
+          </article>
+        )
+      })
+    )
+
     const renderPlayerActionCard = (street: Street, player: HandPlayer, existingAction?: HandAction) => {
       const key = actionDraftKey(street, player.id)
+      const previousSize = getPreviousActionSize(street, player.id, visiblePlayers, sortedActions, availablePositions)
       const persistedDraft = existingAction
         ? {
             playerId: existingAction.playerId,
             street: existingAction.street,
-            actionType: existingAction.actionType,
+            actionType: normalizeActionType(existingAction.actionType),
             actionSize: existingAction.actionSize,
-            sizeUnit: existingAction.sizeUnit,
+            sizeUnit: existingAction.sizeUnit === 'PERCENT' ? 'BB' : existingAction.sizeUnit,
           }
         : undefined
       const draft = actionDrafts[key] ?? persistedDraft ?? createActionDraft(street, player.id)
-      const needsSize = !nonSizingActionTypes.has(draft.actionType)
+      const normalizedDraftActionType = normalizeActionType(draft.actionType)
+      const needsSize = !nonSizingActionTypes.has(normalizedDraftActionType)
+      const sizeLocked = lockedSizingActionTypes.has(normalizedDraftActionType)
       const isSelected = existingAction && selectedActionId === existingAction.id
       const isEditing = existingAction && editingActionId === existingAction.id
       const heroCards = player.holeCards || currentHand.heroCards
+      const sizeUnitValue = draft.sizeUnit === 'PERCENT' ? 'BB' : draft.sizeUnit
+      const actionSizeValue = getResolvedActionSize(street, normalizedDraftActionType, draft.actionSize, player.startingStack, previousSize)
       return (
         <article className={`player-action-card${isSelected ? ' selected' : ''}${isEditing ? ' editing' : ''}`} key={player.id}>
           <div className="player-action-header">
@@ -1709,39 +1883,33 @@ function App() {
           <div className="action-editor-grid">
             <label>
               <span>行动</span>
-              <select
-                value={draft.actionType}
-                onChange={(event) => updateActionDraft(street, player.id, { actionType: event.target.value as ActionType }, persistedDraft)}
-              >
-                {actionTypeOptionsByStreet[street].map((item) => (
-                  <option key={item} value={item}>
-                    {actionTypeLabels[item]}
-                  </option>
-                ))}
-              </select>
+              <SelectField
+                ariaLabel="行动"
+                options={actionTypeOptionsByStreet[street].map((item) => ({ value: item, label: actionTypeLabels[item] }))}
+                value={normalizedDraftActionType}
+                onChange={(nextValue) => updateActionDraft(street, player.id, { actionType: nextValue as ActionType }, persistedDraft)}
+              />
             </label>
             <label>
               <span>大小</span>
               <input
-                disabled={!needsSize}
+                disabled={!needsSize || sizeLocked}
                 min={0}
                 step="0.1"
                 type="number"
-                value={needsSize ? draft.actionSize : 0}
+                value={needsSize ? actionSizeValue : 0}
                 onChange={(event) => updateActionDraft(street, player.id, { actionSize: Number(event.target.value) }, persistedDraft)}
               />
             </label>
             <label>
               <span>单位</span>
-              <select
+              <SelectField
+                ariaLabel="单位"
                 disabled={!needsSize}
-                value={draft.sizeUnit}
-                onChange={(event) => updateActionDraft(street, player.id, { sizeUnit: event.target.value as SizeUnit }, persistedDraft)}
-              >
-                <option value="BB">BB</option>
-                <option value="ABSOLUTE">筹码量</option>
-                <option value="PERCENT">底池比例</option>
-              </select>
+                options={sizeUnitOptions}
+                value={sizeUnitValue}
+                onChange={(nextValue) => updateActionDraft(street, player.id, { sizeUnit: nextValue as SizeUnit }, persistedDraft)}
+              />
             </label>
           </div>
           <div className="row-actions player-action-actions">
@@ -1771,7 +1939,7 @@ function App() {
             </div>
           </div>
           <div className="street-action-list">
-            {streetOrder.map((street) => {
+            {activeStreetOrder.map((street) => {
               const streetActions = sortedActions.filter((action) => action.street === street)
               const streetPlayers = getPlayersForStreet(street, visiblePlayers, sortedActions, availablePositions)
               const boardBlocked = (street === 'TURN' && !hasCompleteCards(currentHand.boardTurn, 1)) || (street === 'RIVER' && !hasCompleteCards(currentHand.boardRiver, 1))
@@ -1783,12 +1951,12 @@ function App() {
                       <strong>{streetLabels[street]}</strong>
                     </div>
                     <div className="street-action-tools">
+                      {street !== 'PREFLOP' ? renderStreetBoardToggle(street as DealtStreet) : null}
                       {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
                     </div>
                   </div>
                   {renderStreetBoardDisplay(street, streetCards)}
-                  {street === 'FLOP' ? renderStreetBoardEditor(street) : null}
-                  {street === 'TURN' || street === 'RIVER' ? renderStreetBoardEditor(street, !streetCards) : null}
+                  {(street === 'FLOP' || street === 'TURN' || street === 'RIVER') && editingBoardStreet === street ? renderStreetBoardEditor(street as DealtStreet, true) : null}
                   {boardBlocked ? (
                     <div className="empty-street">{streetLabels[street]}牌面完整后，该街行动会出现在这里。</div>
                   ) : streetPlayers.length === 0 ? (
@@ -1804,6 +1972,7 @@ function App() {
                 </article>
               )
             })}
+            {renderBoardAddPrompts()}
           </div>
         </div>
         {viewingPlayer && (
@@ -1943,33 +2112,30 @@ function App() {
           </label>
           <label>
             <span>游戏类型</span>
-            <select value={handFilters.gameType ?? 'ALL'} onChange={(event) => setHandFilters({ ...handFilters, gameType: event.target.value as 'ALL' | GameType })}>
-              <option value="ALL">全部</option>
-              <option value="TOURNAMENT">锦标赛</option>
-              <option value="CASH">现金局</option>
-            </select>
+            <SelectField
+              ariaLabel="游戏类型筛选"
+              options={[{ value: 'ALL', label: '全部' }, ...gameTypeOptions]}
+              value={handFilters.gameType ?? 'ALL'}
+              onChange={(nextValue) => setHandFilters({ ...handFilters, gameType: nextValue as 'ALL' | GameType })}
+            />
           </label>
           <label>
             <span>锦标赛阶段</span>
-            <select value={handFilters.stage ?? 'ALL'} onChange={(event) => setHandFilters({ ...handFilters, stage: event.target.value as 'ALL' | TournamentStage })}>
-              <option value="ALL">全部</option>
-              {(['EARLY', 'BUBBLE', 'ITM', 'FT'] as TournamentStage[]).map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage}
-                </option>
-              ))}
-            </select>
+            <SelectField
+              ariaLabel="锦标赛阶段筛选"
+              options={[{ value: 'ALL', label: '全部' }, ...tournamentStageOptions]}
+              value={handFilters.stage ?? 'ALL'}
+              onChange={(nextValue) => setHandFilters({ ...handFilters, stage: nextValue as 'ALL' | TournamentStage })}
+            />
           </label>
           <label>
             <span>对手类型</span>
-            <select value={handFilters.opponentType ?? 'ALL'} onChange={(event) => setHandFilters({ ...handFilters, opponentType: event.target.value as 'ALL' | PlayerType })}>
-              <option value="ALL">全部</option>
-              {Object.entries(playerTypeLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <SelectField
+              ariaLabel="对手类型筛选"
+              options={[{ value: 'ALL', label: '全部' }, ...playerTypeOptions]}
+              value={handFilters.opponentType ?? 'ALL'}
+              onChange={(nextValue) => setHandFilters({ ...handFilters, opponentType: nextValue as 'ALL' | PlayerType })}
+            />
           </label>
           <label>
             <span>开始日期</span>
@@ -2172,34 +2338,31 @@ function App() {
             <h2>{editingStrategyId ? '编辑策略' : '创建策略'}</h2>
             <label>
               <span>目标对手</span>
-              <select value={strategyDraft.playerId} onChange={(event) => setStrategyDraft({ ...strategyDraft, playerId: event.target.value })}>
-                {opponents.map((opponent) => (
-                  <option key={opponent.id} value={opponent.id}>
-                    {opponent.name}
-                  </option>
-                ))}
-              </select>
+              <SelectField
+                ariaLabel="目标对手"
+                options={opponents.map((opponent) => ({ value: opponent.id, label: opponent.name }))}
+                value={strategyDraft.playerId}
+                onChange={(nextValue) => setStrategyDraft({ ...strategyDraft, playerId: nextValue })}
+              />
             </label>
             <div className="form-grid compact">
               <label>
                 <span>调整街道</span>
-                <select value={strategyDraft.adjustmentType} onChange={(event) => setStrategyDraft({ ...strategyDraft, adjustmentType: event.target.value as AdjustmentType })}>
-                  {(['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'GENERAL'] as AdjustmentType[]).map((item) => (
-                    <option key={item} value={item}>
-                      {adjustmentTypeLabels[item]}
-                    </option>
-                  ))}
-                </select>
+                <SelectField
+                  ariaLabel="调整街道"
+                  options={adjustmentTypeOptions}
+                  value={strategyDraft.adjustmentType}
+                  onChange={(nextValue) => setStrategyDraft({ ...strategyDraft, adjustmentType: nextValue as AdjustmentType })}
+                />
               </label>
               <label>
                 <span>调整范围</span>
-                <select value={strategyDraft.adjustmentScope} onChange={(event) => setStrategyDraft({ ...strategyDraft, adjustmentScope: event.target.value as AdjustmentScope })}>
-                  {(['OPEN', '3BET', 'CALL', 'BET', 'RAISE', 'CHECK', 'FOLD'] as AdjustmentScope[]).map((item) => (
-                    <option key={item} value={item}>
-                      {adjustmentScopeLabels[item]}
-                    </option>
-                  ))}
-                </select>
+                <SelectField
+                  ariaLabel="调整范围"
+                  options={adjustmentScopeOptions}
+                  value={strategyDraft.adjustmentScope}
+                  onChange={(nextValue) => setStrategyDraft({ ...strategyDraft, adjustmentScope: nextValue as AdjustmentScope })}
+                />
               </label>
             </div>
             <label>
@@ -2232,13 +2395,15 @@ function App() {
                 <h3>创建策略评估</h3>
                 <label>
                   <span>评估策略</span>
-                  <select value={selectedStrategy.id} onChange={(event) => setEvaluationStrategyId(event.target.value)}>
-                    {strategies.map((strategy) => (
-                      <option key={strategy.id} value={strategy.id}>
-                        {strategy.playerName} · {adjustmentTypeLabels[strategy.adjustmentType]} {adjustmentScopeLabels[strategy.adjustmentScope]}
-                      </option>
-                    ))}
-                  </select>
+                  <SelectField
+                    ariaLabel="评估策略"
+                    options={strategies.map((strategy) => ({
+                      value: strategy.id,
+                      label: `${strategy.playerName} · ${adjustmentTypeLabels[strategy.adjustmentType]} ${adjustmentScopeLabels[strategy.adjustmentScope]}`,
+                    }))}
+                    value={selectedStrategy.id}
+                    onChange={setEvaluationStrategyId}
+                  />
                 </label>
                 <div className="form-grid compact">
                   <label>
@@ -2252,11 +2417,12 @@ function App() {
                 </div>
                 <label>
                   <span>结果</span>
-                  <select value={evaluationDraft.outcome} onChange={(event) => setEvaluationDraft({ ...evaluationDraft, outcome: event.target.value as StrategyOutcome })}>
-                    <option value="WIN">盈利</option>
-                    <option value="LOSS">亏损</option>
-                    <option value="DRAW">持平</option>
-                  </select>
+                  <SelectField
+                    ariaLabel="结果"
+                    options={strategyOutcomeOptions}
+                    value={evaluationDraft.outcome}
+                    onChange={(nextValue) => setEvaluationDraft({ ...evaluationDraft, outcome: nextValue as StrategyOutcome })}
+                  />
                 </label>
                 <label>
                   <span>效果评分</span>
@@ -2451,6 +2617,92 @@ function CardPickerGroup({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function SelectField<Value extends string | number>({
+  ariaLabel,
+  disabled = false,
+  options,
+  value,
+  onChange,
+}: {
+  ariaLabel: string
+  disabled?: boolean
+  options: SelectOption<Value>[]
+  value: Value
+  onChange: (value: Value) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const listboxId = useId()
+  const selected = options.find((item) => item.value === value) ?? options[0]
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!rootRef.current) return
+      const target = event.target
+      if (target instanceof Node && !rootRef.current.contains(target)) {
+        setOpen(false)
+      }
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [open])
+
+  return (
+    <div className={`select-field${open ? ' open' : ''}${disabled ? ' disabled' : ''}`} ref={rootRef}>
+      <button
+        aria-controls={listboxId}
+        aria-expanded={disabled ? false : open}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        className="select-field-trigger"
+        disabled={disabled}
+        type="button"
+        onClick={() => {
+          if (disabled) return
+          setOpen((current) => !current)
+        }}
+      >
+        <span>{selected?.label ?? ''}</span>
+        <ChevronDown size={16} />
+      </button>
+      {open && !disabled && (
+        <div className="select-field-dropdown" role="listbox" id={listboxId} aria-label={ariaLabel}>
+          {options.map((item) => {
+            const isSelected = item.value === value
+            return (
+              <button
+                aria-selected={isSelected}
+                className={`select-field-option${isSelected ? ' selected' : ''}`}
+                disabled={item.disabled}
+                key={String(item.value)}
+                role="option"
+                type="button"
+                onClick={() => {
+                  if (item.disabled) return
+                  onChange(item.value)
+                  setOpen(false)
+                }}
+              >
+                {item.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
