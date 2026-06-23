@@ -184,10 +184,33 @@ export const positionLabels: Record<Position, string> = {
   LJ: 'LJ',
   HJ: 'HJ',
   CO: 'CO',
-  BTN: 'Button',
+  BTN: 'BUTTON',
   SB: 'SB',
   BB: 'BB',
 }
+
+const tablePositionLabelOverrides: Partial<Record<TableSize, Partial<Record<Position, string>>>> = {
+  2: {
+    BTN: 'SB',
+  },
+  4: {
+    CO: 'UTG',
+  },
+  5: {
+    HJ: 'UTG',
+    CO: 'UTG+1',
+  },
+  6: {
+    LJ: 'UTG',
+    HJ: 'UTG+1',
+  },
+  7: {
+    LJ: 'UTG+1',
+  },
+}
+
+export const getPositionLabel = (position: Position, tableSize?: TableSize) =>
+  (tableSize ? tablePositionLabelOverrides[tableSize]?.[position] : undefined) ?? positionLabels[position]
 export const adjustmentTypeOptions: SelectOption<AdjustmentType>[] = (['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'GENERAL'] as AdjustmentType[]).map((value) => ({
   value,
   label: adjustmentTypeLabels[value],

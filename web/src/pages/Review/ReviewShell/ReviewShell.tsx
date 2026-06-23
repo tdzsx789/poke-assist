@@ -17,7 +17,6 @@ export function ReviewShell() {
     getHandInfoValidationMessage,
     getTableValidationMessage,
     goToReviewStep,
-    hasAiResults,
     isHandInfoComplete,
     isTableComplete,
     reviewStep,
@@ -33,7 +32,7 @@ export function ReviewShell() {
     return <AnalysisPage />
   }
 
-  const nextDisabled = busy || reviewStep === 0 || (reviewStep === 1 && !isTableComplete) || (reviewStep === 2 && !isHandInfoComplete) || (reviewStep === 3 && !hasAiResults)
+  const nextDisabled = busy || reviewStep === 0 || (reviewStep === 1 && !isTableComplete) || (reviewStep === 2 && !isHandInfoComplete)
   const nextTitle =
     reviewStep === 0
       ? '请先选择创建或加载牌桌'
@@ -41,9 +40,7 @@ export function ReviewShell() {
         ? getTableValidationMessage()
         : reviewStep === 2 && !isHandInfoComplete
           ? getHandInfoValidationMessage()
-          : reviewStep === 3 && !hasAiResults
-            ? '请先保存任一街道行动，并点击该街道的“分析”生成 AI 结果'
-            : undefined
+          : undefined
   const nextLabel = reviewStep === 0 ? '先选择牌桌入口' : reviewStep === 1 ? '保存牌桌并进入手牌信息' : reviewStep === 2 ? '保存手牌并进入行动信息' : reviewStep === 3 ? '去 AI 分析结果页' : '进入下一步'
   const nextAction = reviewStep === 1 ? saveTableAndContinue : reviewStep === 2 ? saveHand : () => goToReviewStep(Math.min(reviewStep + 1, 4) as ReviewStep)
 
@@ -52,33 +49,35 @@ export function ReviewShell() {
       <section className="review-layout" id="review">
         <section className="main-panel">
           {renderReviewStep()}
-          <footer className="review-action-bar">
-            <div>
-              <strong>{reviewSteps[reviewStep].label}</strong>
-            </div>
-            <div className="review-action-buttons">
-              <button className="ghost-action" type="button" onClick={() => goToReviewStep(Math.max(reviewStep - 1, 0) as ReviewStep)} disabled={reviewStep === 0 || busy}>
-                上一步
-              </button>
-              {reviewStep === 0 ? null : reviewStep < 4 ? (
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={nextAction}
-                  disabled={nextDisabled}
-                  title={nextTitle}
-                >
-                  {busy ? <Loader2 className="spin" size={18} /> : <Save size={18} />}
-                  {nextLabel}
+          {reviewStep > 0 ? (
+            <footer className="review-action-bar">
+              <div>
+                <strong>{reviewSteps[reviewStep].label}</strong>
+              </div>
+              <div className="review-action-buttons">
+                <button className="ghost-action" type="button" onClick={() => goToReviewStep(Math.max(reviewStep - 1, 0) as ReviewStep)} disabled={reviewStep === 0 || busy}>
+                  上一步
                 </button>
-              ) : (
-                <button className="primary-action" type="button" onClick={analyzeHand} disabled={busy || actions.length === 0}>
-                  {busy ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-                  运行整手牌分析
-                </button>
-              )}
-            </div>
-          </footer>
+                {reviewStep < 4 ? (
+                  <button
+                    className="primary-action"
+                    type="button"
+                    onClick={nextAction}
+                    disabled={nextDisabled}
+                    title={nextTitle}
+                  >
+                    {busy ? <Loader2 className="spin" size={18} /> : <Save size={18} />}
+                    {nextLabel}
+                  </button>
+                ) : (
+                  <button className="primary-action" type="button" onClick={analyzeHand} disabled={busy || actions.length === 0}>
+                    {busy ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+                    运行整手牌分析
+                  </button>
+                )}
+              </div>
+            </footer>
+          ) : null}
         </section>
         <aside className="step-panel" aria-label="复盘流程">
           <div className="section-heading">

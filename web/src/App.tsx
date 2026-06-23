@@ -29,6 +29,7 @@ import {
   emptyStrategyDraft,
   getAllowedActionsForHand,
   getDefaultActionSize,
+  getPositionLabel,
   getInitialRoutePath,
   getPreviousActionSize,
   getResolvedActionSize,
@@ -38,7 +39,6 @@ import {
   normalizeActionType,
   parseRoute,
   pathForRoute,
-  positionLabels,
   reviewSteps,
   splitCards,
   streetLabels,
@@ -382,7 +382,7 @@ function App() {
     }
     const positionOwner = players.find((player) => player.position === playerDraftPosition && player.id !== editingPlayerId)
     if (positionOwner) {
-      showNotice(`${positionLabels[playerDraftPosition]} 已有玩家 ${positionOwner.name}，请选择空位或先调整原玩家位置`, 'error')
+      showNotice(`${getPositionLabel(playerDraftPosition, tableSize)} 已有玩家 ${positionOwner.name}，请选择空位或先调整原玩家位置`, 'error')
       return
     }
     setBusy(true)

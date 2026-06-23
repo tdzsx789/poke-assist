@@ -4,6 +4,7 @@ import { apiClient } from '../../../apiClient'
 import { useAppContext } from '../../../AppContext'
 import { CardDisplay, CardPickerGroup } from '../../../components/Card/Card'
 import { SelectField } from '../../../components/SelectField/SelectField'
+import { buildActionCoachPrompt } from '../../../domain/aiPrompts'
 import {
   actionDraftKey,
   actionTypeLabels,
@@ -11,6 +12,7 @@ import {
   createActionDraft,
   dealtStreetOrder,
   getAvailableStreets,
+  getPositionLabel,
   getPlayersForStreet,
   getPreviousActionSize,
   getResolvedActionSize,
@@ -19,7 +21,6 @@ import {
   nonSizingActionTypes,
   normalizeActionType,
   playerTypeLabels,
-  positionLabels,
   sizeUnitOptions,
   streetLabels,
   type DealtStreet,
@@ -33,7 +34,6 @@ export function ActionsPage() {
   const {
     actionDrafts,
     actions,
-    analyzeStreet,
     availablePositions,
     busy,
     currentHand,
@@ -47,6 +47,7 @@ export function ActionsPage() {
     setSelectedActionId,
     setViewingPlayerId,
     showNotice,
+    tableSize,
     updateActionDraft,
     viewingPlayerId,
     visiblePlayers,
@@ -168,6 +169,26 @@ export function ActionsPage() {
     clearCoachResult(snapshot.key)
 
     try {
+      const prompt = buildActionCoachPrompt({
+        mode,
+        tableSize,
+        hand: currentHand,
+        players,
+        actions,
+        street,
+        targetPlayer: player,
+        ...(mode === 'review'
+          ? {
+              reviewAction: {
+                actionType: snapshot.normalizedDraftActionType,
+                actionSize: snapshot.actionSizeValue,
+                sizeUnit: snapshot.sizeUnitValue,
+              },
+            }
+          : {}),
+      })
+      console.log(`[${prompt.modeLabel} Prompt]`, prompt)
+
       const payload = {
         street,
         playerId: player.id,
@@ -226,13 +247,6 @@ export function ActionsPage() {
     )
   }
 
-  const renderStreetAnalysisButton = (street: Street, streetActions: HandAction[], boardBlocked: boolean) => (
-    <button className="primary-action street-analysis-button" type="button" onClick={() => analyzeStreet(street)} disabled={busy || boardBlocked || streetActions.length === 0}>
-      <Sparkles size={16} />
-      分析{streetLabels[street]}
-    </button>
-  )
-
   const renderStreetBoardToggle = (street: DealtStreet) => (
     <button
       className="ghost-action street-board-toggle"
@@ -290,7 +304,7 @@ export function ActionsPage() {
     const sizeLocked = actionChoice !== 'UNSET' && lockedSizingActionTypes.has(normalizedDraftActionType)
     const isSelected = existingAction && selectedActionId === existingAction.id
     const isEditing = existingAction && editingActionId === existingAction.id
-    const heroCards = player.holeCards || currentHand.heroCards
+    const heroCards = player.isHero ? currentHand.heroCards : player.holeCards
     const coachResult = coachResults[key]
     const coachLoading = pendingCoachKey === key
     const suggestDisabled = busy || coachLoading || !isUnset
@@ -302,7 +316,7 @@ export function ActionsPage() {
     return (
       <article className={`player-action-card${isSelected ? ' selected' : ''}${isEditing ? ' editing' : ''}`} key={player.id}>
         <div className="player-action-header">
-          <span className="action-position-badge">{positionLabels[player.position]}</span>
+          <span className="action-position-badge">{getPositionLabel(player.position, tableSize)}</span>
           <button className="player-action-main" type="button" onClick={() => existingAction && setSelectedActionId(existingAction.id)} disabled={!existingAction}>
             <strong>{player.name}</strong>
             <span>{player.isHero ? 'Hero' : playerTypeLabels[player.playerType]} · {player.startingStack}BB</span>
@@ -355,11 +369,11 @@ export function ActionsPage() {
           </button>
           <button type="button" onClick={() => void handleCoachRequest(street, player, 'suggest', existingAction)} disabled={suggestDisabled}>
             {coachLoading && pendingCoachMode === 'suggest' ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />}
-            建议
+            AI建议
           </button>
           <button type="button" onClick={() => void handleCoachRequest(street, player, 'review', existingAction)} disabled={reviewDisabled}>
             {coachLoading && pendingCoachMode === 'review' ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />}
-            复核
+            AI复核
           </button>
         </div>
         {coachResult ? (
@@ -386,7 +400,6 @@ export function ActionsPage() {
         </div>
         <div className="street-action-list">
           {activeStreetOrder.map((street) => {
-            const streetActions = sortedActions.filter((action) => action.street === street)
             const streetPlayers = getPlayersForStreet(street, visiblePlayers, sortedActions, availablePositions)
             const boardBlocked = (street === 'TURN' && !hasCompleteCards(currentHand.boardTurn, 1)) || (street === 'RIVER' && !hasCompleteCards(currentHand.boardRiver, 1))
             const streetCards = streetCardValues[street]
@@ -396,10 +409,7 @@ export function ActionsPage() {
                   <div className="street-action-title">
                     <strong>{streetLabels[street]}</strong>
                   </div>
-                  <div className="street-action-tools">
-                    {street !== 'PREFLOP' ? renderStreetBoardToggle(street as DealtStreet) : null}
-                    {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
-                  </div>
+                  <div className="street-action-tools">{street !== 'PREFLOP' ? renderStreetBoardToggle(street as DealtStreet) : null}</div>
                 </div>
                 {renderStreetBoardDisplay(street, streetCards)}
                 {(street === 'FLOP' || street === 'TURN' || street === 'RIVER') && editingBoardStreet === street ? renderStreetBoardEditor(street as DealtStreet, true) : null}
@@ -409,12 +419,9 @@ export function ActionsPage() {
                   <div className="empty-street">没有可进入{streetLabels[street]}的玩家。</div>
                 ) : (
                   <div className="player-action-grid">
-                    {streetPlayers.map((player) => renderPlayerActionCard(street, player, streetActions.find((action) => action.playerId === player.id)))}
+                    {streetPlayers.map((player) => renderPlayerActionCard(street, player, sortedActions.find((action) => action.street === street && action.playerId === player.id)))}
                   </div>
                 )}
-                <div className="street-action-footer">
-                  {renderStreetAnalysisButton(street, streetActions, boardBlocked)}
-                </div>
               </article>
             )
           })}
@@ -428,7 +435,7 @@ export function ActionsPage() {
               <div>
                 <h2 id="player-info-title">{viewingPlayer.name}</h2>
                 <p>
-                  {positionLabels[viewingPlayer.position]} · {viewingPlayer.isHero ? 'Hero' : playerTypeLabels[viewingPlayer.playerType]}
+                  {getPositionLabel(viewingPlayer.position, tableSize)} · {viewingPlayer.isHero ? 'Hero' : playerTypeLabels[viewingPlayer.playerType]}
                 </p>
               </div>
               <button className="icon-action" type="button" onClick={() => setViewingPlayerId(null)} aria-label="关闭玩家信息弹窗">
@@ -447,7 +454,7 @@ export function ActionsPage() {
               <div>
                 <span>底牌</span>
                 <strong>
-                  <CardDisplay value={viewingPlayer.holeCards || (viewingPlayer.isHero ? currentHand.heroCards : '')} />
+                  <CardDisplay value={viewingPlayer.isHero ? currentHand.heroCards : viewingPlayer.holeCards} />
                 </strong>
               </div>
             </div>

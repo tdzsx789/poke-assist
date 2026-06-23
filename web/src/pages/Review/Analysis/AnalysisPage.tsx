@@ -10,12 +10,13 @@ export function AnalysisPage() {
     analyzeHand,
     busy,
     currentHand,
-    goToReviewStep,
     players,
     selectedAction,
     selectedActionId,
     setSelectedActionId,
   } = useAppContext()
+  const hasAnalysis = actions.some((action) => Boolean(action.analysis))
+  const analyzeLabel = hasAnalysis ? '重新分析整手牌' : '运行整手牌分析'
 
   return (
     <section className="analysis-layout">
@@ -26,7 +27,7 @@ export function AnalysisPage() {
           </div>
           <button className="ghost-action" type="button" onClick={analyzeHand} disabled={busy || actions.length === 0}>
             <Sparkles size={16} />
-            重新分析整手牌
+            {analyzeLabel}
           </button>
         </div>
         <div className="action-summary-grid">
@@ -72,9 +73,10 @@ export function AnalysisPage() {
         ) : (
           <div className="empty-state">
             <Bot size={22} />
-            <p>该行动还没有分析结果。回到行动信息，点击对应街道的“分析”生成结果。</p>
-            <button className="primary-action" type="button" onClick={() => goToReviewStep(3)} disabled={busy}>
-              回到行动信息
+            <p>当前还没有 AI 分析结果。可以直接运行整手牌分析，或回到行动信息继续补充行动。</p>
+            <button className="primary-action" type="button" onClick={analyzeHand} disabled={busy || actions.length === 0}>
+              <Sparkles size={16} />
+              {analyzeLabel}
             </button>
           </div>
         )}

@@ -267,11 +267,17 @@
   .table-template-panel,
   .table-config-panel {
     grid-template-columns: 1fr;
+    padding: 12px;
   }
 
   .table-template-panel button {
     justify-self: stretch;
     width: 100%;
+  }
+
+  .seat-card {
+    min-height: auto;
+    padding: 12px;
   }
 
   .player-modal .form-grid.compact,

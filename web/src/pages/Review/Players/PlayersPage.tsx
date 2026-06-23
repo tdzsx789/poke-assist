@@ -2,9 +2,9 @@ import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { useAppContext } from '../../../AppContext'
 import { SelectField } from '../../../components/SelectField/SelectField'
 import {
+  getPositionLabel,
   playerTypeLabels,
   playerTypeOptions,
-  positionLabels,
   tableSizeOptions,
   type TableSize,
 } from '../../../domain/review'
@@ -80,7 +80,7 @@ export function PlayersPage() {
               <article className={seatedPlayer ? `seat-card filled ${seatedPlayer.isHero ? 'hero' : ''}` : 'seat-card empty'} key={position}>
                 <div className="seat-card-header">
                   <div>
-                    <strong>{positionLabels[position]}</strong>
+                    <strong>{getPositionLabel(position, tableSize)}</strong>
                     <span>{seatedPlayer ? (seatedPlayer.isHero ? 'Hero / 当前主视角' : '对手玩家') : '空位'}</span>
                   </div>
                   {seatedPlayer && <span className={seatedPlayer.isHero ? 'player-badge hero-badge' : 'player-badge'}>{playerTypeLabels[seatedPlayer.playerType]}</span>}
@@ -122,7 +122,7 @@ export function PlayersPage() {
               <div className="modal-header">
                 <div>
                   <h2 id="player-modal-title">{editingPlayerId ? '编辑玩家' : '添加玩家'}</h2>
-                  <p>{editingPlayer ? `${positionLabels[editingPlayer.position]} · ${editingPlayer.name}` : `${positionLabels[playerDraftPosition]} 空位`}</p>
+                  <p>{editingPlayer ? `${getPositionLabel(editingPlayer.position, tableSize)} · ${editingPlayer.name}` : `${getPositionLabel(playerDraftPosition, tableSize)} 空位`}</p>
                 </div>
                 <button className="icon-action" type="button" onClick={cancelPlayerEditing} aria-label="关闭玩家编辑弹窗">
                   <X size={18} />
@@ -138,7 +138,7 @@ export function PlayersPage() {
                   <span>位置</span>
                   <SelectField
                     ariaLabel="位置"
-                    options={availablePositions.map((item) => ({ value: item, label: positionLabels[item] }))}
+                    options={availablePositions.map((item) => ({ value: item, label: getPositionLabel(item, tableSize) }))}
                     value={playerDraftPosition}
                     onChange={(nextValue) => setPlayerDraft({ ...playerDraft, position: nextValue as Position })}
                   />

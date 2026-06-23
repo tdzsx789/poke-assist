@@ -52,7 +52,20 @@
 }
 
 @media (max-width: 760px) {
+  .table-entry-panel {
+    min-height: auto;
+  }
+
   .table-entry-grid {
     grid-template-columns: 1fr;
+  }
+
+  .entry-card {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .entry-card h3 {
+    font-size: 22px;
   }
 }

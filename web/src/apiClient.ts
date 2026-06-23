@@ -118,7 +118,7 @@ const buildBlindLevel = (hand: HandInfo) => {
   return `${hand.smallBlind || 100}/${hand.bigBlind || 200}${anteText}`
 }
 
-const getHeroCards = () => backendPlayers.find((player) => player.isHero)?.holeCards || backendHand?.heroCards || ''
+const getHeroCards = () => backendHand?.heroCards || backendPlayers.find((player) => player.isHero)?.holeCards || ''
 
 const withFallback = async <T>(operation: () => Promise<T>, fallback: () => Promise<T>): Promise<T> => {
   if (!usingBackend || backendUnavailable) return fallback()

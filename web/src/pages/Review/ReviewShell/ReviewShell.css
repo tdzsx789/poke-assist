@@ -122,13 +122,39 @@
 }
 
 @media (max-width: 760px) {
+  .review-layout {
+    gap: 12px;
+  }
+
+  .main-panel {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
   .review-action-bar,
   .review-action-buttons {
     align-items: stretch;
-    flex-direction: column;
+  }
+
+  .review-action-bar {
+    gap: 10px;
+    margin: 14px -14px 0;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .review-action-bar div:first-child,
+  .step-panel,
+  .flow-strip {
+    display: none;
   }
 
   .review-action-buttons {
     width: 100%;
+    flex-direction: row;
+  }
+
+  .review-action-buttons > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 10px;
   }
 }

@@ -319,13 +319,13 @@ let hand: HandInfo = {
 let players: HandPlayer[] = [
   {
     id: 'player-lj',
-    name: 'LJ_Player',
+    name: 'UTG_Player',
     position: 'LJ',
     playerType: 'TIGHT_AGGRESSIVE',
     startingStack: 31,
     isHero: false,
     holeCards: '',
-    rangeNotes: '偏标准紧凶，LJ open 范围较稳。',
+    rangeNotes: '6-max UTG open 范围较稳。',
   },
   {
     id: 'player-hj',
@@ -627,7 +627,7 @@ const mockPositionLabels: Record<Position, string> = {
   LJ: 'LJ',
   HJ: 'HJ',
   CO: 'CO',
-  BTN: 'Button',
+  BTN: 'BUTTON',
   SB: 'SB',
   BB: 'BB',
 }
